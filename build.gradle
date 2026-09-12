@@ -1,0 +1,112 @@
+import groovy.json.JsonSlurper
+
+plugins {
+    id "java"
+    id "idea"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://repo.gradle.org/gradle/libs-releases" } // for gradle-tooling-api
+    flatDir { dirs mcreator_path + '/lib' }
+}
+
+group = 'net.mcreator.wingman'
+version = new JsonSlurper().parse(file('src/main/resources/plugin.json'))['info']['version']
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+configurations {
+    implementation.extendsFrom export
+
+    // MCreator's runtime classpath, used to exclude libraries MCreator already provides from the plugin
+    mcreatorProvided { canBeConsumed = false }
+}
+
+dependencies {
+    implementation project(':MCreator')
+    mcreatorProvided project(':MCreator')
+
+    // Use "export" configuration for dependencies that should be included in the plugin (if MCreator does not provide them)
+    export "com.agentclientprotocol:acp-core:0.17.0"
+}
+
+// MCreator's build script configures idea.project, which only exists on the root project. As MCreator is included
+// here as a subproject, share this root project's IDEA project model with it so its configuration does not fail
+project(':MCreator').plugins.withType(IdeaPlugin).configureEach { ideaPlugin ->
+    ideaPlugin.model.project = rootProject.idea.project
+}
+
+// Re-export MCreator's implementation dependencies to this project once the MCreator project is evaluated
+rootProject.project(':MCreator').afterEvaluate { mcreator ->
+    mcreator.configurations.named("implementation").get().dependencies.each { dep ->
+        dependencies.add("implementation", dep)
+    }
+}
+
+tasks.jar {
+    archiveFileName.set("wingman.zip")
+
+    // Exported libraries are unpacked into the plugin, so their shared files (licenses, manifests) collide
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', '**/module-info.class'
+
+    from {
+        // Bundle only exported libraries that MCreator does not already provide on its runtime classpath.
+        // Libraries are matched by module (ignoring version) so a different version of a library MCreator
+        // ships is not bundled twice, as MCreator's copy would be loaded anyway
+        def provided = configurations.mcreatorProvided.incoming.artifacts.artifacts
+                .collectEntries { [(providedKey(it)): it] }
+
+        configurations.export.incoming.artifacts.artifacts.findAll { artifact ->
+            return provided[providedKey(artifact)] == null // if provided by MCreator, skip it
+        }.collect { it.file.isDirectory() ? it.file : zipTree(it.file) }
+    }
+}
+
+// Identifies a resolved artifact by its module (group:name) or, for plain file dependencies, by its file name
+static String providedKey(ResolvedArtifactResult artifact) {
+    def id = artifact.id.componentIdentifier
+    id instanceof ModuleComponentIdentifier ? "${id.group}:${id.module}" : artifact.file.name
+}
+
+idea {
+    module {
+        // define exclude dirs
+        excludeDirs += file(".gradle")
+        excludeDirs += file(".idea")
+        excludeDirs += file("build")
+        excludeDirs += file("gradle")
+        excludeDirs += file("jdk")
+        excludeDirs += file("license")
+        excludeDirs += file("logs")
+    }
+}
+
+tasks.register('runMCreatorWithPlugin', JavaExec) {
+    dependsOn jar
+
+    environment("MCREATOR_PLUGINS_FOLDER", file("./build/libs"))
+
+    jvmArgs '--add-opens', 'java.base/java.lang=ALL-UNNAMED'
+
+    classpath = project(':MCreator').sourceSets.main.runtimeClasspath
+
+    mainClass = 'net.mcreator.Launcher'
+
+    workingDir = mcreator_path
+}
+
+subprojects { subproject ->
+    subproject.plugins.withType(JavaPlugin).tap {
+        configureEach {
+            test {
+                dependsOn rootProject.jar
+
+                environment("MCREATOR_PLUGINS_FOLDER", new File(rootProject.projectDir, "/build/libs"))
+
+                workingDir = mcreator_path
+            }
+        }
+    }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "wingman",
+  "supportedversions": [
+    202600399999,
+    2026003
+  ],
+  "weight": 0,
+  "javaplugin": "net.mcreator.wingman.WingmanPlugin",
+  "info": {
+    "name": "MCreator Wingman",
+    "version": "1.0",
+    "description": "A plugin to connect agents with MCreator",
+    "author": "Pylo"
+  }
+}

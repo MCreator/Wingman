@@ -20,23 +20,30 @@
 package net.mcreator.wingman.ui;
 
 import net.mcreator.ui.MCreator;
-import net.mcreator.wingman.data.AssistantService;
 import net.mcreator.wingman.acp.AcpChatService;
+import net.mcreator.wingman.acp.provider.AcpProviders;
 
 import javax.swing.*;
 import java.awt.*;
 
 public class WingmanPanel extends JPanel {
 
-	private final AssistantService assistantService;
+	private final AcpChatService assistantService;
 
 	public WingmanPanel(MCreator mcreator) {
 		super(new BorderLayout());
 
-		this.assistantService = new AcpChatService(mcreator, "agent acp");
+		this.assistantService = new AcpChatService(mcreator, AcpProviders::selected);
 
 		ChatsPanel chatsPanel = new ChatsPanel(mcreator, assistantService);
 		add(chatsPanel, BorderLayout.CENTER);
+	}
+
+	/**
+	 * Called when Wingman preferences were saved, so the next message goes to the newly selected agent.
+	 */
+	public void preferencesChanged() {
+		assistantService.disconnect();
 	}
 
 	public void close() {

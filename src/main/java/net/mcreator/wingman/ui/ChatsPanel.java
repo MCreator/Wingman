@@ -6,6 +6,7 @@ import net.mcreator.ui.component.ScrollWheelPassLayer;
 import net.mcreator.ui.component.ScrollablePanel;
 import net.mcreator.ui.component.util.ComponentUtils;
 import net.mcreator.ui.component.util.PanelUtils;
+import net.mcreator.ui.dialogs.preferences.PreferencesDialog;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.init.UIRES;
 import net.mcreator.ui.laf.themes.Theme;
@@ -85,10 +86,15 @@ public final class ChatsPanel extends JPanel {
 		conversationsButton.setToolTipText(L10N.t("wingman.conversations"));
 		conversationsButton.addActionListener(_ -> showConversationsMenu());
 
+		JButton settingsButton = new JButton(UIRES.get("settings"));
+		settingsButton.setToolTipText(L10N.t("wingman.settings"));
+		settingsButton.addActionListener(_ -> new PreferencesDialog(mcreator, L10N.t("wingman.preferences.page")));
+
 		JToolBar headerActions = new JToolBar();
 		headerActions.setFloatable(false);
 		headerActions.setOpaque(false);
 		headerActions.add(Box.createHorizontalGlue());
+		headerActions.add(settingsButton);
 		headerActions.add(conversationsButton);
 		add(headerActions, BorderLayout.NORTH);
 

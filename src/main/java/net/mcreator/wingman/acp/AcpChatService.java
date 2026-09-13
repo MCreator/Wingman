@@ -21,13 +21,11 @@ package net.mcreator.wingman.acp;
 
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
-import com.agentclientprotocol.sdk.client.transport.AgentParameters;
-import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
-import com.agentclientprotocol.sdk.json.JacksonAcpJsonMapperSupplier;
-import com.agentclientprotocol.sdk.spec.AcpClientTransport;
+import com.agentclientprotocol.sdk.spec.AcpClientSession;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
-import net.mcreator.io.OS;
 import net.mcreator.ui.MCreator;
+import net.mcreator.ui.init.L10N;
+import net.mcreator.wingman.acp.provider.AcpProvider;
 import net.mcreator.wingman.data.AssistantService;
 import net.mcreator.wingman.data.ChatConversation;
 import net.mcreator.wingman.data.ChatMessage;
@@ -37,12 +35,15 @@ import org.apache.logging.log4j.Logger;
 
 import javax.annotation.Nullable;
 import java.time.Duration;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
- * Assistant service backed by an external coding agent that speaks the Agent Client Protocol (ACP) over stdio.
- * The agent process is started lazily from the given command line, and one ACP session is kept per conversation.
+ * Assistant service backed by an external coding agent that speaks the Agent Client Protocol (ACP). The agent is
+ * connected lazily using the transport of the given provider, and one ACP session is kept per conversation.
  * <p>
  * The local history is the source of truth for what the user sees. The ACP session only carries the context of the
  * agent: it is reattached when possible, and when it is gone, a new session is started with the local history
@@ -56,56 +57,37 @@ public final class AcpChatService extends AssistantService {
     private static final Duration REQUEST_TIMEOUT = Duration.ofHours(1);
 
     private final MCreator mcreator;
-    private final AcpClientTransport acpClientTransport;
+    private final Supplier<AcpProvider> providerSupplier;
 
+    private AcpProvider provider;
     private AcpSyncClient client;
+    private List<AcpSchema.AuthMethod> authMethods = List.of();
 
-    // Sessions the running agent process knows about (created or loaded since the process was started)
+    // Sessions the connected agent knows about (created or loaded since it was connected)
     private final Set<String> knownSessions = ConcurrentHashMap.newKeySet();
     private final Map<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
     private final Map<String, Float> contextUsage = new ConcurrentHashMap<>();
 
     /**
-     * @param agentCommandLine Command line that starts the ACP agent in stdio mode, e.g. "agent acp"
+     * @param providerSupplier Provider of the agent to connect to, queried whenever a connection is made
      */
-    public AcpChatService(MCreator mcreator, String agentCommandLine) {
-        this(mcreator, stdioTransport(parseCommandLine(agentCommandLine)));
-    }
-
-    public AcpChatService(MCreator mcreator, AcpClientTransport transport) {
+    public AcpChatService(MCreator mcreator, Supplier<AcpProvider> providerSupplier) {
         super(mcreator);
         this.mcreator = mcreator;
-        this.acpClientTransport = transport;
-    }
-
-    private static AgentParameters parseCommandLine(String commandLine) {
-        List<String> tokens = new ArrayList<>(Arrays.asList(commandLine.trim().split("\\s+")));
-        if (tokens.isEmpty() || tokens.getFirst().isEmpty()) {
-            throw new IllegalArgumentException("ACP agent command line must not be empty");
-        }
-        if (OS.getOS() == OS.WINDOWS) {
-            // Go through the shell so .cmd shims of npm or Cursor installed agents resolve from PATH
-            tokens.addAll(0, List.of("cmd.exe", "/c"));
-        }
-        return AgentParameters.builder(tokens.getFirst()).args(tokens.subList(1, tokens.size())).build();
-    }
-
-    private static AcpClientTransport stdioTransport(AgentParameters agentParameters) {
-        StdioAcpClientTransport transport = new StdioAcpClientTransport(agentParameters,
-                new JacksonAcpJsonMapperSupplier().get());
-        transport.setStdErrorHandler(line -> LOG.debug("[agent] {}", line));
-        transport.setExceptionHandler(e -> LOG.warn("ACP transport error", e));
-        return transport;
+        this.providerSupplier = providerSupplier;
     }
 
     private synchronized AcpSyncClient client() {
         if (client == null) {
-            AcpSyncClient newClient = AcpClient.sync(acpClientTransport).requestTimeout(REQUEST_TIMEOUT).clientCapabilities(
+            provider = providerSupplier.get();
+            AcpSyncClient newClient = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
+                    .clientCapabilities(
                             new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
                     .sessionUpdateConsumer(this::handleSessionUpdate)
                     .requestPermissionHandler(this::handlePermissionRequest).build();
             try {
-                newClient.initialize();
+                AcpSchema.InitializeResponse response = newClient.initialize();
+                authMethods = response.authMethods() != null ? response.authMethods() : List.of();
             } catch (RuntimeException e) {
                 newClient.close();
                 throw e;
@@ -118,6 +100,21 @@ public final class AcpChatService extends AssistantService {
     @Nullable
     private synchronized AcpSyncClient currentClient() {
         return client;
+    }
+
+    /**
+     * Closes the connection to the agent. The next request connects again, e.g. to the newly selected provider.
+     */
+    public synchronized void disconnect() {
+        if (client != null) {
+            try {
+                client.closeGracefully();
+            } catch (RuntimeException e) {
+                LOG.warn("Failed to close ACP client", e);
+            }
+            client = null;
+            knownSessions.clear();
+        }
     }
 
     private String workspaceDirectory() {
@@ -137,14 +134,13 @@ public final class AcpChatService extends AssistantService {
         ActiveRequest active = new ActiveRequest(conversation, listener);
         String sessionId = null;
         try {
-            AcpSyncClient client = client();
-            Session session = ensureSession(client, conversation);
+            Session session = ensureSession(conversation);
             sessionId = session.id();
             activeRequests.put(sessionId, active);
             // Instructions and the earlier history are sent only with the first prompt of a new session and are not
             // part of the local history
             String promptText = session.fresh() ? SessionPrompts.firstPrompt(history, messageText) : messageText;
-            AcpSchema.PromptResponse response = client.prompt(
+            AcpSchema.PromptResponse response = client().prompt(
                     new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(promptText))));
             active.complete(response.stopReason());
         } catch (Throwable e) {
@@ -165,7 +161,27 @@ public final class AcpChatService extends AssistantService {
     private record Session(String id, boolean fresh) {
     }
 
-    private Session ensureSession(AcpSyncClient client, ChatConversation conversation) {
+    // If the agent requires the user to log in first, the user is asked to and the session is opened once more
+    private Session ensureSession(ChatConversation conversation) {
+        try {
+            return openSession(client(), conversation);
+        } catch (AcpClientSession.AcpError e) {
+            if (!AcpAuthenticator.isAuthRequired(e))
+                throw e;
+
+            LOG.info("Agent {} requires the user to log in", provider.name());
+            if (!AcpAuthenticator.login(mcreator, provider, authMethods, this::reconnect))
+                throw new IllegalStateException(L10N.t("wingman.auth.cancelled"), e);
+            return openSession(client(), conversation);
+        }
+    }
+
+    private AcpSyncClient reconnect() {
+        disconnect();
+        return client();
+    }
+
+    private Session openSession(AcpSyncClient client, ChatConversation conversation) {
         String sessionId = conversation.sessionId();
         if (sessionId != null && knownSessions.contains(sessionId)) {
             return new Session(sessionId, false);
@@ -178,6 +194,7 @@ public final class AcpChatService extends AssistantService {
                 knownSessions.add(sessionId);
                 return new Session(sessionId, false);
             } catch (RuntimeException e) {
+                // The session may belong to another agent or be gone, a new one is started with the history relayed
                 LOG.warn("Failed to load ACP session {}, starting a new one", sessionId, e);
             }
         }
@@ -188,7 +205,6 @@ public final class AcpChatService extends AssistantService {
         return new Session(sessionId, true);
     }
 
-    @SuppressWarnings("resource")
     @Override
     public void cancel(ChatConversation conversation) {
         for (Map.Entry<String, ActiveRequest> entry : activeRequests.entrySet()) {
@@ -215,15 +231,8 @@ public final class AcpChatService extends AssistantService {
     }
 
     @Override
-    public synchronized void close() {
-        if (client != null) {
-            try {
-                client.closeGracefully();
-            } catch (RuntimeException e) {
-                LOG.warn("Failed to close ACP client", e);
-            }
-            client = null;
-        }
+    public void close() {
+        disconnect();
     }
 
     private void handleSessionUpdate(AcpSchema.SessionNotification notification) {

@@ -21,11 +21,15 @@ package net.mcreator.wingman;
 
 import net.mcreator.plugin.JavaPlugin;
 import net.mcreator.plugin.Plugin;
+import net.mcreator.plugin.events.ApplicationLoadedEvent;
+import net.mcreator.plugin.events.ui.PreferencesDialogEvent;
 import net.mcreator.plugin.events.workspace.MCreatorClosedEvent;
 import net.mcreator.plugin.events.workspace.MCreatorLoadedEvent;
 import net.mcreator.ui.MCreator;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.init.UIRES;
+import net.mcreator.wingman.preferences.WingmanPreferences;
+import net.mcreator.wingman.preferences.WingmanPreferencesPanel;
 import net.mcreator.wingman.ui.WingmanPanel;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -44,6 +48,17 @@ public class WingmanPlugin extends JavaPlugin {
 
 	public WingmanPlugin(Plugin plugin) {
 		super(plugin);
+
+		// Preferences have to be registered before MCreator loads the preferences of plugins
+		addListener(ApplicationLoadedEvent.class, _ -> WingmanPreferences.init());
+
+		addListener(PreferencesDialogEvent.SectionsLoaded.class, event -> {
+			WingmanPreferencesPanel page = new WingmanPreferencesPanel(event.getPreferencesDialog());
+			event.getPreferencesDialog().addPage(L10N.t("wingman.preferences.page"), page, () -> {
+				page.save();
+				panels.values().forEach(WingmanPanel::preferencesChanged);
+			});
+		});
 
 		// The dock is added synchronously so it is present when MCreator calculates the frame size right after this event
 		addListener(MCreatorLoadedEvent.class, event -> {

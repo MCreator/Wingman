@@ -10,22 +10,20 @@ import net.mcreator.ui.dialogs.preferences.PreferencesDialog;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.init.UIRES;
 import net.mcreator.ui.laf.themes.Theme;
-import net.mcreator.wingman.data.*;
 import net.mcreator.util.StringUtils;
+import net.mcreator.wingman.data.*;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import javax.swing.*;
+import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -393,8 +391,8 @@ public final class ChatsPanel extends JPanel {
 		Dimension stopSize = sendButton.getPreferredSize();
 		sendButton.setText(L10N.t("wingman.send"));
 		Dimension sendSize = sendButton.getPreferredSize();
-		sendButton.setPreferredSize(new Dimension(Math.max(sendSize.width, stopSize.width),
-				Math.max(sendSize.height, stopSize.height)));
+		sendButton.setPreferredSize(
+				new Dimension(Math.max(sendSize.width, stopSize.width), Math.max(sendSize.height, stopSize.height)));
 
 		JScrollPane inputScroll = new JScrollPane(inputArea);
 		inputScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -513,9 +511,8 @@ public final class ChatsPanel extends JPanel {
 		CompletableFuture.runAsync(() -> assistantService.stream(activeConversation, userText, listener))
 				.exceptionally(error -> {
 					// A service that throws instead of reporting through the listener must not leave the UI waiting
-					Throwable cause = error instanceof CompletionException && error.getCause() != null ?
-							error.getCause() :
-							error;
+					Throwable cause =
+							error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
 					LOG.error("Assistant request failed", cause);
 					listener.onError(cause.toString());
 					return null;
@@ -776,7 +773,8 @@ public final class ChatsPanel extends JPanel {
 		bar.setValue(bar.getMaximum());
 	}
 
-	private record StreamedAssistantRow(ChatBubble bubble, JPanel row) {}
+	private record StreamedAssistantRow(ChatBubble bubble, JPanel row) {
+	}
 
 	private final class ThinkingHandle {
 		private final JPanel row;

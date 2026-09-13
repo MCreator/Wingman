@@ -130,8 +130,9 @@ final class AcpAuthenticator {
 
 		JComboBox<AcpSchema.AuthMethod> methodBox = new JComboBox<>(methods.toArray(AcpSchema.AuthMethod[]::new));
 		methodBox.setRenderer(new DefaultListCellRenderer() {
-			@Override public Component getListCellRendererComponent(JList<?> list, Object value, int index,
-					boolean isSelected, boolean cellHasFocus) {
+			@Override
+			public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected,
+					boolean cellHasFocus) {
 				super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 				if (value instanceof AcpSchema.AuthMethod method) {
 					setText(method.description() != null && !method.description().isBlank() ?

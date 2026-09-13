@@ -26,7 +26,7 @@ import javax.annotation.Nullable;
 import java.awt.*;
 
 public record ChatMessage(Role role, String initialText, Integer thinkingDurationSeconds, String toolCallId,
-                          String toolName, String toolArguments, String toolResult) {
+						  String toolName, String toolArguments, String toolResult) {
 
 	public ChatMessage(Role role, String initialText) {
 		this(role, initialText, null, null, null, null, null);

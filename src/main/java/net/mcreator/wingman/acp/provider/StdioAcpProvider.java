@@ -49,8 +49,8 @@ public abstract class StdioAcpProvider extends AcpProvider {
 
 	@Override public AcpClientTransport transport() {
 		AgentCommand command = command();
-		Path executable = command.resolveExecutable().orElseThrow(
-				() -> new IllegalStateException(L10N.t("wingman.provider.not_installed.message", name())));
+		Path executable = command.resolveExecutable()
+				.orElseThrow(() -> new IllegalStateException(L10N.t("wingman.provider.not_installed.message", name())));
 
 		List<String> commandLine = new ArrayList<>();
 		String fileName = executable.getFileName().toString().toLowerCase(Locale.ROOT);

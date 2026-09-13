@@ -35,26 +35,24 @@ import java.util.Optional;
  */
 public record AgentCommand(String executable, List<String> args) {
 
-    /**
-     * @return The command of a whitespace separated command line, with an empty executable if the line is blank
-     */
-    public static AgentCommand parse(String commandLine) {
-        List<String> tokens = commandLine == null || commandLine.isBlank() ?
-                List.of() :
-                Arrays.asList(commandLine.trim().split("\\s+"));
-        return tokens.isEmpty() ?
-                new AgentCommand("", List.of()) :
-                new AgentCommand(tokens.getFirst(), List.copyOf(tokens.subList(1, tokens.size())));
-    }
+	/**
+	 * @return The command of a whitespace separated command line, with an empty executable if the line is blank
+	 */
+	public static AgentCommand parse(String commandLine) {
+		List<String> tokens = commandLine == null || commandLine.isBlank() ?
+				List.of() :
+				Arrays.asList(commandLine.trim().split("\\s+"));
+		return tokens.isEmpty() ?
+				new AgentCommand("", List.of()) :
+				new AgentCommand(tokens.getFirst(), List.copyOf(tokens.subList(1, tokens.size())));
+	}
 
-    public Optional<Path> resolveExecutable() {
-        return ExecutableFinder.find(executable);
-    }
+	public Optional<Path> resolveExecutable() {
+		return ExecutableFinder.find(executable);
+	}
 
-    @Override
-    @Nonnull
-    public String toString() {
-        return (executable + " " + String.join(" ", args)).trim();
-    }
+	@Override @Nonnull public String toString() {
+		return (executable + " " + String.join(" ", args)).trim();
+	}
 
 }

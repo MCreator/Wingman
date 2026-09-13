@@ -51,212 +51,207 @@ import java.util.function.Supplier;
  */
 public final class AcpChatService extends AssistantService {
 
-    private static final Logger LOG = LogManager.getLogger(AcpChatService.class);
+	private static final Logger LOG = LogManager.getLogger(AcpChatService.class);
 
-    // A single agent turn may run for a long time, so the SDK default request timeout is far too short
-    private static final Duration REQUEST_TIMEOUT = Duration.ofHours(1);
+	// A single agent turn may run for a long time, so the SDK default request timeout is far too short
+	private static final Duration REQUEST_TIMEOUT = Duration.ofHours(1);
 
-    private final MCreator mcreator;
-    private final Supplier<AcpProvider> providerSupplier;
+	private final MCreator mcreator;
+	private final Supplier<AcpProvider> providerSupplier;
 
-    private AcpProvider provider;
-    private AcpSyncClient client;
-    private List<AcpSchema.AuthMethod> authMethods = List.of();
+	private AcpProvider provider;
+	private AcpSyncClient client;
+	private List<AcpSchema.AuthMethod> authMethods = List.of();
 
-    // Sessions the connected agent knows about (created or loaded since it was connected)
-    private final Set<String> knownSessions = ConcurrentHashMap.newKeySet();
-    private final Map<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
-    private final Map<String, Float> contextUsage = new ConcurrentHashMap<>();
+	// Sessions the connected agent knows about (created or loaded since it was connected)
+	private final Set<String> knownSessions = ConcurrentHashMap.newKeySet();
+	private final Map<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
+	private final Map<String, Float> contextUsage = new ConcurrentHashMap<>();
 
-    /**
-     * @param providerSupplier Provider of the agent to connect to, queried whenever a connection is made
-     */
-    public AcpChatService(MCreator mcreator, Supplier<AcpProvider> providerSupplier) {
-        super(mcreator);
-        this.mcreator = mcreator;
-        this.providerSupplier = providerSupplier;
-    }
+	/**
+	 * @param providerSupplier Provider of the agent to connect to, queried whenever a connection is made
+	 */
+	public AcpChatService(MCreator mcreator, Supplier<AcpProvider> providerSupplier) {
+		super(mcreator);
+		this.mcreator = mcreator;
+		this.providerSupplier = providerSupplier;
+	}
 
-    private synchronized AcpSyncClient client() {
-        if (client == null) {
-            provider = providerSupplier.get();
-            AcpSyncClient newClient = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
-                    .clientCapabilities(
-                            new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
-                    .sessionUpdateConsumer(this::handleSessionUpdate)
-                    .requestPermissionHandler(this::handlePermissionRequest).build();
-            try {
-                AcpSchema.InitializeResponse response = newClient.initialize();
-                authMethods = response.authMethods() != null ? response.authMethods() : List.of();
-            } catch (RuntimeException e) {
-                newClient.close();
-                throw e;
-            }
-            client = newClient;
-        }
-        return client;
-    }
+	private synchronized AcpSyncClient client() {
+		if (client == null) {
+			provider = providerSupplier.get();
+			AcpSyncClient newClient = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
+					.clientCapabilities(
+							new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
+					.sessionUpdateConsumer(this::handleSessionUpdate)
+					.requestPermissionHandler(this::handlePermissionRequest).build();
+			try {
+				AcpSchema.InitializeResponse response = newClient.initialize();
+				authMethods = response.authMethods() != null ? response.authMethods() : List.of();
+			} catch (RuntimeException e) {
+				newClient.close();
+				throw e;
+			}
+			client = newClient;
+		}
+		return client;
+	}
 
-    @Nullable
-    private synchronized AcpSyncClient currentClient() {
-        return client;
-    }
+	@Nullable private synchronized AcpSyncClient currentClient() {
+		return client;
+	}
 
-    /**
-     * Closes the connection to the agent. The next request connects again, e.g. to the newly selected provider.
-     */
-    public synchronized void disconnect() {
-        if (client != null) {
-            try {
-                client.closeGracefully();
-            } catch (RuntimeException e) {
-                LOG.warn("Failed to close ACP client", e);
-            }
-            client = null;
-            knownSessions.clear();
-        }
-    }
+	/**
+	 * Closes the connection to the agent. The next request connects again, e.g. to the newly selected provider.
+	 */
+	public synchronized void disconnect() {
+		if (client != null) {
+			try {
+				client.closeGracefully();
+			} catch (RuntimeException e) {
+				LOG.warn("Failed to close ACP client", e);
+			}
+			client = null;
+			knownSessions.clear();
+		}
+	}
 
-    private String workspaceDirectory() {
-        return mcreator.getWorkspace().getWorkspaceFolder().getAbsolutePath();
-    }
+	private String workspaceDirectory() {
+		return mcreator.getWorkspace().getWorkspaceFolder().getAbsolutePath();
+	}
 
-    @Override
-    public void stream(ChatConversation conversation, String messageText, StreamListener listener) {
-        if (messageText == null || messageText.isBlank()) {
-            return;
-        }
+	@Override public void stream(ChatConversation conversation, String messageText, StreamListener listener) {
+		if (messageText == null || messageText.isBlank()) {
+			return;
+		}
 
-        // Messages recorded before this request are relayed to the agent if the conversation gets a fresh session
-        List<ChatMessage> history = conversation.messages();
-        conversation.addMessage(ChatMessage.user(messageText));
+		// Messages recorded before this request are relayed to the agent if the conversation gets a fresh session
+		List<ChatMessage> history = conversation.messages();
+		conversation.addMessage(ChatMessage.user(messageText));
 
-        ActiveRequest active = new ActiveRequest(conversation, listener);
-        String sessionId = null;
-        try {
-            Session session = ensureSession(conversation);
-            sessionId = session.id();
-            activeRequests.put(sessionId, active);
-            // Instructions and the earlier history are sent only with the first prompt of a new session and are not
-            // part of the local history
-            String promptText = session.fresh() ? SessionPrompts.firstPrompt(history, messageText) : messageText;
-            AcpSchema.PromptResponse response = client().prompt(
-                    new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(promptText))));
-            active.complete(response.stopReason());
-        } catch (Throwable e) {
-            // Errors (e.g. ServiceConfigurationError, NoClassDefFoundError) are reported too, so the UI never waits forever
-            LOG.warn("ACP prompt failed", e);
-            active.fail(e);
-        } finally {
-            if (sessionId != null) {
-                activeRequests.remove(sessionId, active);
-            }
-        }
-    }
+		ActiveRequest active = new ActiveRequest(conversation, listener);
+		String sessionId = null;
+		try {
+			Session session = ensureSession(conversation);
+			sessionId = session.id();
+			activeRequests.put(sessionId, active);
+			// Instructions and the earlier history are sent only with the first prompt of a new session and are not
+			// part of the local history
+			String promptText = session.fresh() ? SessionPrompts.firstPrompt(history, messageText) : messageText;
+			AcpSchema.PromptResponse response = client().prompt(
+					new AcpSchema.PromptRequest(sessionId, List.of(new AcpSchema.TextContent(promptText))));
+			active.complete(response.stopReason());
+		} catch (Throwable e) {
+			// Errors (e.g. ServiceConfigurationError, NoClassDefFoundError) are reported too, so the UI never waits forever
+			LOG.warn("ACP prompt failed", e);
+			active.fail(e);
+		} finally {
+			if (sessionId != null) {
+				activeRequests.remove(sessionId, active);
+			}
+		}
+	}
 
-    /**
-     * @param id    ACP session id of the conversation
-     * @param fresh true if the session was just created and has no history on the agent side
-     */
-    private record Session(String id, boolean fresh) {
-    }
+	/**
+	 * @param id    ACP session id of the conversation
+	 * @param fresh true if the session was just created and has no history on the agent side
+	 */
+	private record Session(String id, boolean fresh) {
+	}
 
-    // If the agent requires the user to log in first, the user is asked to and the session is opened once more
-    private Session ensureSession(ChatConversation conversation) {
-        try {
-            return openSession(client(), conversation);
-        } catch (AcpClientSession.AcpError e) {
-            if (!AcpAuthenticator.isAuthRequired(e))
-                throw e;
+	// If the agent requires the user to log in first, the user is asked to and the session is opened once more
+	private Session ensureSession(ChatConversation conversation) {
+		try {
+			return openSession(client(), conversation);
+		} catch (AcpClientSession.AcpError e) {
+			if (!AcpAuthenticator.isAuthRequired(e))
+				throw e;
 
-            LOG.info("Agent {} requires the user to log in", provider.name());
-            if (!AcpAuthenticator.login(mcreator, provider, authMethods, this::reconnect))
-                throw new IllegalStateException(L10N.t("wingman.auth.cancelled"), e);
-            return openSession(client(), conversation);
-        }
-    }
+			LOG.info("Agent {} requires the user to log in", provider.name());
+			if (!AcpAuthenticator.login(mcreator, provider, authMethods, this::reconnect))
+				throw new IllegalStateException(L10N.t("wingman.auth.cancelled"), e);
+			return openSession(client(), conversation);
+		}
+	}
 
-    private AcpSyncClient reconnect() {
-        disconnect();
-        return client();
-    }
+	private AcpSyncClient reconnect() {
+		disconnect();
+		return client();
+	}
 
-    private Session openSession(AcpSyncClient client, ChatConversation conversation) {
-        String sessionId = conversation.sessionId();
-        if (sessionId != null && knownSessions.contains(sessionId)) {
-            return new Session(sessionId, false);
-        }
+	private Session openSession(AcpSyncClient client, ChatConversation conversation) {
+		String sessionId = conversation.sessionId();
+		if (sessionId != null && knownSessions.contains(sessionId)) {
+			return new Session(sessionId, false);
+		}
 
-        if (sessionId != null && client.getAgentCapabilities().supportsLoadSession()) {
-            try {
-                // The history the agent replays while loading is ignored, the local history is already shown
-                client.loadSession(new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), List.of()));
-                knownSessions.add(sessionId);
-                return new Session(sessionId, false);
-            } catch (RuntimeException e) {
-                // The session may belong to another agent or be gone, a new one is started with the history relayed
-                LOG.warn("Failed to load ACP session {}, starting a new one", sessionId, e);
-            }
-        }
+		if (sessionId != null && client.getAgentCapabilities().supportsLoadSession()) {
+			try {
+				// The history the agent replays while loading is ignored, the local history is already shown
+				client.loadSession(new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), List.of()));
+				knownSessions.add(sessionId);
+				return new Session(sessionId, false);
+			} catch (RuntimeException e) {
+				// The session may belong to another agent or be gone, a new one is started with the history relayed
+				LOG.warn("Failed to load ACP session {}, starting a new one", sessionId, e);
+			}
+		}
 
-        sessionId = client.newSession(new AcpSchema.NewSessionRequest(workspaceDirectory(), List.of())).sessionId();
-        knownSessions.add(sessionId);
-        conversation.setSessionId(sessionId);
-        return new Session(sessionId, true);
-    }
+		sessionId = client.newSession(new AcpSchema.NewSessionRequest(workspaceDirectory(), List.of())).sessionId();
+		knownSessions.add(sessionId);
+		conversation.setSessionId(sessionId);
+		return new Session(sessionId, true);
+	}
 
-    @Override
-    public void cancel(ChatConversation conversation) {
-        for (Map.Entry<String, ActiveRequest> entry : activeRequests.entrySet()) {
-            ActiveRequest active = entry.getValue();
-            if (active.conversation() == conversation) {
-                active.cancel();
-                AcpSyncClient client = currentClient();
-                if (client != null) {
-                    try {
-                        client.cancel(new AcpSchema.CancelNotification(entry.getKey()));
-                    } catch (RuntimeException e) {
-                        LOG.warn("Failed to send ACP cancel notification", e);
-                    }
-                }
-                return;
-            }
-        }
-    }
+	@Override public void cancel(ChatConversation conversation) {
+		for (Map.Entry<String, ActiveRequest> entry : activeRequests.entrySet()) {
+			ActiveRequest active = entry.getValue();
+			if (active.conversation() == conversation) {
+				active.cancel();
+				AcpSyncClient client = currentClient();
+				if (client != null) {
+					try {
+						client.cancel(new AcpSchema.CancelNotification(entry.getKey()));
+					} catch (RuntimeException e) {
+						LOG.warn("Failed to send ACP cancel notification", e);
+					}
+				}
+				return;
+			}
+		}
+	}
 
-    @Override
-    public float getContextUsage(ChatConversation conversation) {
-        String sessionId = conversation.sessionId();
-        return sessionId == null ? 0f : contextUsage.getOrDefault(sessionId, 0f);
-    }
+	@Override public float getContextUsage(ChatConversation conversation) {
+		String sessionId = conversation.sessionId();
+		return sessionId == null ? 0f : contextUsage.getOrDefault(sessionId, 0f);
+	}
 
-    @Override
-    public void close() {
-        disconnect();
-    }
+	@Override public void close() {
+		disconnect();
+	}
 
-    private void handleSessionUpdate(AcpSchema.SessionNotification notification) {
-        AcpSchema.SessionUpdate update = notification.update();
-        if (update instanceof AcpSchema.UsageUpdate usage) {
-            if (usage.used() != null && usage.size() != null && usage.size() > 0) {
-                contextUsage.put(notification.sessionId(), Math.min(1f, (float) usage.used() / usage.size()));
-            }
-            return;
-        }
+	private void handleSessionUpdate(AcpSchema.SessionNotification notification) {
+		AcpSchema.SessionUpdate update = notification.update();
+		if (update instanceof AcpSchema.UsageUpdate usage) {
+			if (usage.used() != null && usage.size() != null && usage.size() > 0) {
+				contextUsage.put(notification.sessionId(), Math.min(1f, (float) usage.used() / usage.size()));
+			}
+			return;
+		}
 
-        // Updates replayed while a session is loaded have no active request and are dropped
-        ActiveRequest active = activeRequests.get(notification.sessionId());
-        if (active != null) {
-            active.handle(update);
-        }
-    }
+		// Updates replayed while a session is loaded have no active request and are dropped
+		ActiveRequest active = activeRequests.get(notification.sessionId());
+		if (active != null) {
+			active.handle(update);
+		}
+	}
 
-    private AcpSchema.RequestPermissionResponse handlePermissionRequest(AcpSchema.RequestPermissionRequest request) {
-        ActiveRequest active = activeRequests.get(request.sessionId());
-        if (active == null || request.options() == null || request.options().isEmpty()) {
-            return new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionCancelled());
-        }
-        return new AcpSchema.RequestPermissionResponse(active.requestPermission(request.toolCall(), request.options()));
-    }
+	private AcpSchema.RequestPermissionResponse handlePermissionRequest(AcpSchema.RequestPermissionRequest request) {
+		ActiveRequest active = activeRequests.get(request.sessionId());
+		if (active == null || request.options() == null || request.options().isEmpty()) {
+			return new AcpSchema.RequestPermissionResponse(new AcpSchema.PermissionCancelled());
+		}
+		return new AcpSchema.RequestPermissionResponse(active.requestPermission(request.toolCall(), request.options()));
+	}
 
 }

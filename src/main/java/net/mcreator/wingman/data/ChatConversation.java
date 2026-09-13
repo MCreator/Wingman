@@ -130,7 +130,8 @@ public final class ChatConversation {
 		}
 	}
 
-	public record Summary(String id, String title, long updatedAt) {}
+	public record Summary(String id, String title, long updatedAt) {
+	}
 
 	private void persist() {
 		if (storage != null) {

@@ -110,7 +110,8 @@ final class ActiveRequest extends TurnAssembler {
 		return new AcpSchema.PermissionSelected(chosen.optionId());
 	}
 
-	@Nullable private static StreamListener.PermissionDecision toDecision(@Nullable AcpSchema.PermissionOptionKind kind) {
+	@Nullable
+	private static StreamListener.PermissionDecision toDecision(@Nullable AcpSchema.PermissionOptionKind kind) {
 		if (kind == null) {
 			return null;
 		}

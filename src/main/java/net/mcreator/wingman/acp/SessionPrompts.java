@@ -19,9 +19,9 @@
 
 package net.mcreator.wingman.acp;
 
+import net.mcreator.util.StringUtils;
 import net.mcreator.wingman.data.ChatMessage;
 import net.mcreator.wingman.util.ThinkingContentParser;
-import net.mcreator.util.StringUtils;
 
 import javax.annotation.Nullable;
 import java.util.List;

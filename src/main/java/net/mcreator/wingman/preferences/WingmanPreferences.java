@@ -21,6 +21,7 @@ package net.mcreator.wingman.preferences;
 
 import net.mcreator.preferences.PreferencesSection;
 import net.mcreator.preferences.entries.StringEntry;
+import net.mcreator.wingman.acp.provider.AcpProviders;
 
 /**
  * Preferences of Wingman. The section is hidden from the generic preferences UI, its values are edited on the
@@ -32,16 +33,15 @@ public final class WingmanPreferences extends PreferencesSection {
 
 	private static WingmanPreferences instance;
 
-	public final StringEntry provider; // ID of the selected provider, empty until the user selects one
+	public final StringEntry provider;
 	public final StringEntry customCommand;
 
 	private WingmanPreferences() {
 		super(IDENTIFIER);
-		provider = addEntry(new StringEntry("provider", ""));
+		provider = addEntry(new StringEntry("provider", AcpProviders.CUSTOM.id()));
 		customCommand = addEntry(new StringEntry("customCommand", ""));
 	}
 
-	// Has to be called from the application loaded event, before MCreator loads the preferences of plugins
 	public static void init() {
 		instance = new WingmanPreferences();
 	}

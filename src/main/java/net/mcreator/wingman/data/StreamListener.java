@@ -37,12 +37,15 @@ public interface StreamListener {
 		return PermissionDecision.ALLOW_ONCE;
 	}
 
-	record ToolRequestEvent(String id, String name, String arguments) {}
+	record ToolRequestEvent(String id, String name, String arguments) {
+	}
 
-	record ToolResultEvent(String id, String name, String result) {}
+	record ToolResultEvent(String id, String name, String result) {
+	}
 
 	record PermissionRequest(String toolCallId, String toolName, String title, String arguments,
-	                         Set<PermissionDecision> offeredDecisions) {}
+							 Set<PermissionDecision> offeredDecisions) {
+	}
 
 	enum PermissionDecision {
 		ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE, REJECT_ALWAYS, CANCELLED

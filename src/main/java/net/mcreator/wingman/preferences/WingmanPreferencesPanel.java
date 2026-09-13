@@ -155,8 +155,9 @@ public class WingmanPreferencesPanel extends JPanel {
 			setBorder(BorderFactory.createEmptyBorder(3, 5, 3, 0));
 		}
 
-		@Override public Component getListCellRendererComponent(JList<? extends AcpProvider> list, AcpProvider value,
-				int index, boolean isSelected, boolean cellHasFocus) {
+		@Override
+		public Component getListCellRendererComponent(JList<? extends AcpProvider> list, AcpProvider value, int index,
+				boolean isSelected, boolean cellHasFocus) {
 			icon.setIcon(value.icon());
 			name.setText(value.name());
 			description.setText(value.description());

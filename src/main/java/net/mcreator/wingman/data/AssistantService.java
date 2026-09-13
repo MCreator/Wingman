@@ -21,8 +21,6 @@ package net.mcreator.wingman.data;
 
 import net.mcreator.ui.MCreator;
 
-import java.util.concurrent.CompletableFuture;
-
 public abstract class AssistantService {
 
 	protected final ChatHistoryStorage historyStorage;
@@ -33,15 +31,6 @@ public abstract class AssistantService {
 
 	public ChatHistoryStorage getHistoryStorage() {
 		return historyStorage;
-	}
-
-	/**
-	 * Loads the conversation to be shown. Services that keep conversation state on an external agent can
-	 * override this to synchronize the local history first. If the returned future completes exceptionally,
-	 * the local history is shown as is.
-	 */
-	public CompletableFuture<ChatConversation> openConversation(String conversationId) {
-		return CompletableFuture.completedFuture(historyStorage.load(conversationId));
 	}
 
 	abstract public void stream(ChatConversation conversation, String messageText, StreamListener listener);

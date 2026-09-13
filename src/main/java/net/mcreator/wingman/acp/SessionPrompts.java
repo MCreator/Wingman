@@ -44,7 +44,7 @@ final class SessionPrompts {
 			The conversation in the conversation_history block below took place before this session was started, so \
 			it is not part of your context yet. Treat it as the earlier part of this chat and continue from it.""";
 
-	// Tags delimiting the parts prepended to the first prompt of a session, so they can be recognized on replay
+	// Tags delimiting the parts prepended to the first prompt of a session
 	private static final String INSTRUCTIONS_OPEN = "<instructions>\n";
 	private static final String INSTRUCTIONS_CLOSE = "\n</instructions>\n\n";
 	private static final String HISTORY_OPEN = "<conversation_history>\n";
@@ -96,28 +96,6 @@ final class SessionPrompts {
 
 	private static String abbreviate(@Nullable String text) {
 		return text == null ? "" : StringUtils.abbreviateString(text, RELAY_TOOL_TEXT_LIMIT);
-	}
-
-	/**
-	 * Removes the instructions and the relayed history from the text of a replayed user message, so that the first
-	 * prompt of a session is recorded locally the way the user typed it.
-	 */
-	static String stripPreamble(String userText) {
-		if (!userText.startsWith(INSTRUCTIONS_OPEN)) {
-			return userText;
-		}
-		int end = userText.indexOf(INSTRUCTIONS_CLOSE);
-		if (end < 0) {
-			return userText;
-		}
-		end += INSTRUCTIONS_CLOSE.length();
-		if (userText.startsWith(HISTORY_OPEN, end)) {
-			int historyEnd = userText.indexOf(HISTORY_CLOSE, end);
-			if (historyEnd >= 0) {
-				end = historyEnd + HISTORY_CLOSE.length();
-			}
-		}
-		return userText.substring(end);
 	}
 
 }

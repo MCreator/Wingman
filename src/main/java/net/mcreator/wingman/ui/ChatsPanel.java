@@ -62,7 +62,6 @@ public final class ChatsPanel extends JPanel {
 	private int lastAppliedBubbleWidth = -1;
 	private boolean requestInProgress;
 	private boolean cancelRequested;
-	private boolean conversationLoading;
 
 	private final MCreator mcreator;
 
@@ -243,21 +242,11 @@ public final class ChatsPanel extends JPanel {
 		if (isBusy() || conversationId.equals(activeConversation.id())) {
 			return;
 		}
-		conversationLoading = true;
-		conversationsButton.setEnabled(false);
-		assistantService.openConversation(conversationId)
-				.whenComplete((loaded, error) -> SwingUtilities.invokeLater(() -> {
-					ChatConversation conversation = loaded != null ? loaded : historyStorage.load(conversationId);
-					if (conversation != null) {
-						activeConversation = conversation;
-					}
-					reloadActiveConversationView();
-					if (error != null) {
-						appendActivityEvent(L10N.t("wingman.conversation.load_failed"));
-					}
-					conversationLoading = false;
-					conversationsButton.setEnabled(true);
-				}));
+		ChatConversation conversation = historyStorage.load(conversationId);
+		if (conversation != null) {
+			activeConversation = conversation;
+		}
+		reloadActiveConversationView();
 	}
 
 	private void deleteConversation(String conversationId, String conversationTitle) {
@@ -307,7 +296,7 @@ public final class ChatsPanel extends JPanel {
 	}
 
 	private boolean isBusy() {
-		return requestInProgress || conversationLoading;
+		return requestInProgress;
 	}
 
 	private void setRequestInProgress(boolean inProgress) {

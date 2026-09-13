@@ -89,22 +89,6 @@ public final class ChatConversation {
 		}
 	}
 
-	public void replaceMessages(List<ChatMessage> newMessages) {
-		synchronized (lock) {
-			messages.clear();
-			messages.addAll(newMessages);
-			if (DEFAULT_TITLE.equals(title)) {
-				for (ChatMessage message : messages) {
-					if (message.role() == ChatMessage.Role.USER) {
-						title = deriveTitle(message.text());
-						break;
-					}
-				}
-			}
-		}
-		persist();
-	}
-
 	public String id() {
 		return id;
 	}

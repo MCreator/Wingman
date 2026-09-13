@@ -38,12 +38,15 @@ import org.apache.logging.log4j.Logger;
 import javax.annotation.Nullable;
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Assistant service backed by an external coding agent that speaks the Agent Client Protocol (ACP) over stdio.
  * The agent process is started lazily from the given command line, and one ACP session is kept per conversation.
+ * <p>
+ * The local history is the source of truth for what the user sees. The ACP session only carries the context of the
+ * agent: it is reattached when possible, and when it is gone, a new session is started with the local history
+ * relayed in its first prompt.
  */
 public final class AcpChatService extends AssistantService {
 
@@ -60,9 +63,6 @@ public final class AcpChatService extends AssistantService {
     // Sessions the running agent process knows about (created or loaded since the process was started)
     private final Set<String> knownSessions = ConcurrentHashMap.newKeySet();
     private final Map<String, ActiveRequest> activeRequests = new ConcurrentHashMap<>();
-
-    // Histories being replayed by the agent while a session is loaded
-    private final Map<String, HistoryReplay> historyReplays = new ConcurrentHashMap<>();
     private final Map<String, Float> contextUsage = new ConcurrentHashMap<>();
 
     /**
@@ -125,29 +125,6 @@ public final class AcpChatService extends AssistantService {
     }
 
     @Override
-    public CompletableFuture<ChatConversation> openConversation(String conversationId) {
-        ChatConversation conversation = historyStorage.load(conversationId);
-        String sessionId = conversation != null ? conversation.sessionId() : null;
-        if (sessionId == null || knownSessions.contains(sessionId)) {
-            return CompletableFuture.completedFuture(conversation);
-        }
-        return CompletableFuture.supplyAsync(() -> {
-            AcpSyncClient client = client();
-            if (client.getAgentCapabilities().supportsLoadSession()) {
-                HistoryReplay replay = new HistoryReplay();
-                loadSession(client, sessionId, replay);
-                // The agent is the source of truth for the history of its sessions, but some agents (e.g. Cursor)
-                // restore the context without replaying it, in which case the local history is kept
-                List<ChatMessage> messages = replay.messages();
-                if (!messages.isEmpty()) {
-                    conversation.replaceMessages(messages);
-                }
-            }
-            return conversation;
-        });
-    }
-
-    @Override
     public void stream(ChatConversation conversation, String messageText, StreamListener listener) {
         if (messageText == null || messageText.isBlank()) {
             return;
@@ -196,8 +173,9 @@ public final class AcpChatService extends AssistantService {
 
         if (sessionId != null && client.getAgentCapabilities().supportsLoadSession()) {
             try {
-                // The replayed history is not collected here as the local history is already shown for this conversation
-                loadSession(client, sessionId, null);
+                // The history the agent replays while loading is ignored, the local history is already shown
+                client.loadSession(new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), List.of()));
+                knownSessions.add(sessionId);
                 return new Session(sessionId, false);
             } catch (RuntimeException e) {
                 LOG.warn("Failed to load ACP session {}, starting a new one", sessionId, e);
@@ -208,21 +186,6 @@ public final class AcpChatService extends AssistantService {
         knownSessions.add(sessionId);
         conversation.setSessionId(sessionId);
         return new Session(sessionId, true);
-    }
-
-    /**
-     * @param replay Collector for the history the agent replays while loading, or null to ignore the replay
-     */
-    private void loadSession(AcpSyncClient client, String sessionId, @Nullable HistoryReplay replay) {
-        if (replay != null) {
-            historyReplays.put(sessionId, replay);
-        }
-        try {
-            client.loadSession(new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), List.of()));
-        } finally {
-            historyReplays.remove(sessionId);
-        }
-        knownSessions.add(sessionId);
     }
 
     @SuppressWarnings("resource")
@@ -272,12 +235,7 @@ public final class AcpChatService extends AssistantService {
             return;
         }
 
-        HistoryReplay replay = historyReplays.get(notification.sessionId());
-        if (replay != null) {
-            replay.handle(update);
-            return;
-        }
-
+        // Updates replayed while a session is loaded have no active request and are dropped
         ActiveRequest active = activeRequests.get(notification.sessionId());
         if (active != null) {
             active.handle(update);

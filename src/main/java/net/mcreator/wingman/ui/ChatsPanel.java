@@ -20,9 +20,11 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -58,6 +60,8 @@ public final class ChatsPanel extends JPanel {
 	private final Timer resizeDebounceTimer;
 	private final ContextUsageBar contextUsageBar;
 	private final Map<String, ToolCallPanel> activeToolPanels = new LinkedHashMap<>();
+	// Conversations that already got a local history checkpoint since this MCreator instance was opened
+	private final Set<String> checkpointedConversations = new HashSet<>();
 
 	private int lastAppliedBubbleWidth = -1;
 	private boolean requestInProgress;
@@ -418,6 +422,10 @@ public final class ChatsPanel extends JPanel {
 			return;
 		}
 		inputArea.setText("");
+		if (checkpointedConversations.add(activeConversation.id())) {
+			// Snapshot the workspace once per conversation and MCreator session before the agent starts working
+			mcreator.getWorkspace().getHistoryManager().importantCheckpoint("wingman_conversation");
+		}
 		appendMessage(ChatMessage.user(userText));
 		cancelRequested = false;
 		setRequestInProgress(true);

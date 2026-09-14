@@ -501,7 +501,10 @@ public final class ChatsPanel extends JPanel {
 			}
 
 			@Override public PermissionDecision onPermissionRequest(PermissionRequest request) {
-				return PermissionDecision.ALLOW_ONCE; // TODO: implement approval system, and read-only mode
+				// TODO: implement approval system, and read-only mode
+				LOG.debug("Permission request for tool {}: {}, kind {}, decisions: {}", request.toolName(),
+						request.title(), request.kind(), request.offeredDecisions());
+				return PermissionDecision.ALLOW_ONCE;
 			}
 		};
 

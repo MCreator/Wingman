@@ -66,14 +66,14 @@ final class ActiveRequest extends TurnAssembler {
 		listener.onPartialResponse(responseText);
 	}
 
-	@Override void onToolRequest(String id, String name, String arguments) {
+	@Override void onToolRequest(String id, String name, @Nullable AcpSchema.ToolKind kind, String arguments) {
 		conversation.addMessage(ChatMessage.toolRequest(id, name, arguments));
-		listener.onToolRequest(new StreamListener.ToolRequestEvent(id, name, arguments));
+		listener.onToolRequest(new StreamListener.ToolRequestEvent(id, name, toKind(kind), arguments));
 	}
 
-	@Override void onToolResult(String id, String name, String result) {
+	@Override void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String result) {
 		conversation.addMessage(ChatMessage.toolResult(id, name, result));
-		listener.onToolResult(new StreamListener.ToolResultEvent(id, name, result));
+		listener.onToolResult(new StreamListener.ToolResultEvent(id, name, toKind(kind), result));
 	}
 
 	AcpSchema.RequestPermissionOutcome requestPermission(@Nullable AcpSchema.ToolCallUpdate toolCall,
@@ -91,16 +91,18 @@ final class ActiveRequest extends TurnAssembler {
 		String title = toolCall != null ? toolCall.title() : null;
 		String arguments = toolCall != null ? toJson(toolCall.rawInput()) : "";
 		String name;
+		StreamListener.ToolKind kind;
 		synchronized (this) {
 			if (cancelled) {
 				return new AcpSchema.PermissionCancelled();
 			}
 			name = id != null ? toolName(id, title, toolCall.kind()) : "tool";
+			kind = toKind(id != null ? toolKind(id, toolCall.kind()) : null);
 		}
 
 		// The listener may block waiting for the user, so it is called without holding the request lock
 		StreamListener.PermissionDecision decision = listener.onPermissionRequest(
-				new StreamListener.PermissionRequest(id, name, title != null ? title : name, arguments,
+				new StreamListener.PermissionRequest(id, name, title != null ? title : name, arguments, kind,
 						Set.copyOf(byDecision.keySet())));
 
 		AcpSchema.PermissionOption chosen = decision != null ? byDecision.get(decision) : null;
@@ -108,6 +110,24 @@ final class ActiveRequest extends TurnAssembler {
 			return new AcpSchema.PermissionCancelled();
 		}
 		return new AcpSchema.PermissionSelected(chosen.optionId());
+	}
+
+	private static StreamListener.ToolKind toKind(@Nullable AcpSchema.ToolKind kind) {
+		if (kind == null) {
+			return StreamListener.ToolKind.OTHER;
+		}
+		return switch (kind) {
+			case READ -> StreamListener.ToolKind.READ;
+			case EDIT -> StreamListener.ToolKind.EDIT;
+			case DELETE -> StreamListener.ToolKind.DELETE;
+			case MOVE -> StreamListener.ToolKind.MOVE;
+			case SEARCH -> StreamListener.ToolKind.SEARCH;
+			case EXECUTE -> StreamListener.ToolKind.EXECUTE;
+			case THINK -> StreamListener.ToolKind.THINK;
+			case FETCH -> StreamListener.ToolKind.FETCH;
+			case SWITCH_MODE -> StreamListener.ToolKind.SWITCH_MODE;
+			case OTHER -> StreamListener.ToolKind.OTHER;
+		};
 	}
 
 	@Nullable

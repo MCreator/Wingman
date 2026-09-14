@@ -82,6 +82,7 @@ public final class AcpChatService extends AssistantService {
 			provider = providerSupplier.get();
 			AcpSyncClient newClient = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
 					.clientCapabilities(
+							// Only allow manipulations of the workspace via official MCP, no direct FS or terminal
 							new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
 					.sessionUpdateConsumer(this::handleSessionUpdate)
 					.requestPermissionHandler(this::handlePermissionRequest).build();

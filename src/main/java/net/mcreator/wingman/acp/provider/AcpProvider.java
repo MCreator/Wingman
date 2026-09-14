@@ -20,12 +20,11 @@
 package net.mcreator.wingman.acp.provider;
 
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
-import com.formdev.flatlaf.extras.FlatSVGIcon;
-import net.mcreator.ui.laf.themes.Theme;
+import net.mcreator.ui.init.UIRES;
+import net.mcreator.util.image.IconUtils;
 
 import javax.annotation.Nullable;
 import javax.swing.*;
-import java.net.URL;
 
 public abstract class AcpProvider {
 
@@ -72,13 +71,8 @@ public abstract class AcpProvider {
 	public abstract AcpClientTransport transport();
 
 	public synchronized Icon icon() {
-		if (icon == null) {
-			URL url = AcpProvider.class.getResource("/net/mcreator/wingman/provider/" + id + ".svg");
-			FlatSVGIcon svgIcon = new FlatSVGIcon(url).derive(ICON_SIZE, ICON_SIZE);
-			// Provider icons are monochrome, so they are painted in the foreground color of the current theme
-			svgIcon.setColorFilter(new FlatSVGIcon.ColorFilter(_ -> Theme.current().getForegroundColor()));
-			icon = svgIcon;
-		}
+		if (icon == null)
+			icon = IconUtils.resize(UIRES.get("wingman.provider." + id), ICON_SIZE);
 		return icon;
 	}
 

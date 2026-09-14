@@ -33,22 +33,24 @@ public interface StreamListener {
 
 	void onError(String errorMessage);
 
-	default PermissionDecision onPermissionRequest(PermissionRequest request) {
-		return PermissionDecision.ALLOW_ONCE;
+	PermissionDecision onPermissionRequest(PermissionRequest request);
+
+	record ToolRequestEvent(String id, String name, ToolKind kind, String arguments) {
 	}
 
-	record ToolRequestEvent(String id, String name, String arguments) {
+	record ToolResultEvent(String id, String name, ToolKind kind, String result) {
 	}
 
-	record ToolResultEvent(String id, String name, String result) {
-	}
-
-	record PermissionRequest(String toolCallId, String toolName, String title, String arguments,
+	record PermissionRequest(String toolCallId, String toolName, String title, String arguments, ToolKind kind,
 							 Set<PermissionDecision> offeredDecisions) {
 	}
 
 	enum PermissionDecision {
 		ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE, REJECT_ALWAYS, CANCELLED
+	}
+
+	enum ToolKind {
+		READ, EDIT, DELETE, MOVE, SEARCH, EXECUTE, THINK, FETCH, SWITCH_MODE, OTHER
 	}
 
 }

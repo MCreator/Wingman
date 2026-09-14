@@ -35,6 +35,8 @@ abstract class TurnAssembler {
 
 	private final StringBuilder responseBuilder = new StringBuilder();
 	private final Map<String, String> toolNames = new HashMap<>();
+	// Kinds of the tool calls seen so far, as a permission request for a call may come without one
+	private final Map<String, AcpSchema.ToolKind> toolKinds = new HashMap<>();
 	private final Set<String> finishedTools = new HashSet<>();
 
 	private boolean thinking;
@@ -60,9 +62,15 @@ abstract class TurnAssembler {
 	 */
 	abstract void onResponseText(String responseText);
 
-	abstract void onToolRequest(String id, String name, String arguments);
+	/**
+	 * @param kind Kind of the tool as reported by the agent, may be null
+	 */
+	abstract void onToolRequest(String id, String name, @Nullable AcpSchema.ToolKind kind, String arguments);
 
-	abstract void onToolResult(String id, String name, String result);
+	/**
+	 * @param kind Kind of the tool as reported by the agent, may be null
+	 */
+	abstract void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String result);
 
 	/**
 	 * Closes an open thought and returns the response text accumulated so far, starting a new response
@@ -100,13 +108,17 @@ abstract class TurnAssembler {
 			return;
 		}
 		String name = toolName(id, title, kind);
+		if (kind != null) {
+			toolKinds.putIfAbsent(id, kind);
+		}
+		AcpSchema.ToolKind knownKind = toolKind(id, kind);
 		if (!toolNames.containsKey(id)) {
 			toolNames.put(id, name);
-			onToolRequest(id, name, toJson(rawInput));
+			onToolRequest(id, name, knownKind, toJson(rawInput));
 		}
 		if ((status == AcpSchema.ToolCallStatus.COMPLETED || status == AcpSchema.ToolCallStatus.FAILED)
 				&& finishedTools.add(id)) {
-			onToolResult(id, name, toolResultText(content, rawOutput, status));
+			onToolResult(id, name, knownKind, toolResultText(content, rawOutput, status));
 		}
 	}
 
@@ -119,6 +131,13 @@ abstract class TurnAssembler {
 			return title.trim();
 		}
 		return kind != null ? kind.name().toLowerCase(Locale.ROOT) : "tool";
+	}
+
+	/**
+	 * @return The given kind, or the kind the tool call was reported with earlier if this one is missing
+	 */
+	@Nullable AcpSchema.ToolKind toolKind(String id, @Nullable AcpSchema.ToolKind kind) {
+		return kind != null ? kind : toolKinds.get(id);
 	}
 
 	private static String toolResultText(@Nullable List<AcpSchema.ToolCallContent> content, @Nullable Object rawOutput,

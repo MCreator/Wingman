@@ -4,6 +4,8 @@ import net.mcreator.ui.component.SquareLoaderIcon;
 import net.mcreator.ui.component.util.ComponentUtils;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.laf.themes.Theme;
+import net.mcreator.wingman.data.ChatMessage;
+import net.mcreator.wingman.data.StreamListener;
 
 import javax.swing.*;
 import java.awt.*;
@@ -34,12 +36,12 @@ final class ToolCallPanel extends JPanel {
 		add(content, BorderLayout.CENTER);
 	}
 
-	static ToolCallPanel running(String toolName) {
-		return new ToolCallPanel(toolName, true);
+	static ToolCallPanel running(StreamListener.ToolRequestEvent requestEvent) {
+		return new ToolCallPanel(requestEvent.name(), true);
 	}
 
-	static ToolCallPanel completed(String toolName) {
-		return new ToolCallPanel(toolName, false);
+	static ToolCallPanel fromHistory(ChatMessage message) {
+		return new ToolCallPanel(message.toolName(), false);
 	}
 
 	void markCompleted() {

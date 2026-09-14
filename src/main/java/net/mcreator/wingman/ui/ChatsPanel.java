@@ -47,8 +47,7 @@ public final class ChatsPanel extends JPanel {
 
 	private final JTextArea inputArea;
 
-	// TODO: we likely want to use send and stop icons instead of text
-	private final JButton sendButton = L10N.button("wingman.send");
+	private final JButton sendButton = new JButton(UIRES.get("wingman.send"));
 
 	private final AssistantService assistantService;
 	private final ChatHistoryStorage historyStorage;
@@ -309,7 +308,8 @@ public final class ChatsPanel extends JPanel {
 
 	private void setRequestInProgress(boolean inProgress) {
 		requestInProgress = inProgress;
-		sendButton.setText(L10N.t(inProgress ? "wingman.stop" : "wingman.send"));
+		sendButton.setIcon(UIRES.get(inProgress ? "wingman.stop" : "wingman.send"));
+		sendButton.setToolTipText(L10N.t(inProgress ? "wingman.stop" : "wingman.send"));
 		sendButton.setEnabled(true);
 		conversationsButton.setEnabled(!inProgress);
 	}
@@ -383,16 +383,9 @@ public final class ChatsPanel extends JPanel {
 			else
 				sendCurrentMessage();
 		});
+		sendButton.setToolTipText(L10N.t("wingman.send"));
 		sendButton.putClientProperty("JButton.buttonType", "roundRect");
-		sendButton.setMargin(new Insets(1, 10, 1, 10));
-
-		// Fix the button size to the larger of the two labels so swapping between them does not shift the layout
-		sendButton.setText(L10N.t("wingman.stop"));
-		Dimension stopSize = sendButton.getPreferredSize();
-		sendButton.setText(L10N.t("wingman.send"));
-		Dimension sendSize = sendButton.getPreferredSize();
-		sendButton.setPreferredSize(
-				new Dimension(Math.max(sendSize.width, stopSize.width), Math.max(sendSize.height, stopSize.height)));
+		sendButton.setMargin(new Insets(1, 1, 1, 1));
 
 		JScrollPane inputScroll = new JScrollPane(inputArea);
 		inputScroll.setBorder(BorderFactory.createEmptyBorder());
@@ -439,9 +432,9 @@ public final class ChatsPanel extends JPanel {
 
 		StreamListener listener = new StreamListener() {
 			@Override public void onPartialResponse(String responseText) {
-				if (responseText == null || responseText.isBlank()) {
+				if (responseText == null || responseText.isBlank())
 					return;
-				}
+
 				SwingUtilities.invokeLater(() -> {
 					thinking.stop();
 					if (assistantRowRef.get() == null) {
@@ -458,13 +451,13 @@ public final class ChatsPanel extends JPanel {
 			@Override public void onToolRequest(StreamListener.ToolRequestEvent request) {
 				SwingUtilities.invokeLater(() -> {
 					thinking.stop();
-					showRunningTool(request.id(), request.name());
+					showRunningTool(request);
 				});
 			}
 
 			@Override public void onToolResult(StreamListener.ToolResultEvent result) {
 				SwingUtilities.invokeLater(() -> {
-					finishToolCall(result.id());
+					finishToolCall(result);
 					refreshContextUsage();
 				});
 			}
@@ -506,6 +499,10 @@ public final class ChatsPanel extends JPanel {
 					refreshContextUsage();
 				});
 			}
+
+			@Override public PermissionDecision onPermissionRequest(PermissionRequest request) {
+				return PermissionDecision.ALLOW_ONCE; // TODO: implement approval system, and read-only mode
+			}
 		};
 
 		CompletableFuture.runAsync(() -> assistantService.stream(activeConversation, userText, listener))
@@ -531,10 +528,10 @@ public final class ChatsPanel extends JPanel {
 		case SYSTEM -> appendSystemError(message);
 		case TOOL_REQUEST -> {
 			if (!hasMatchingToolResultAfter(index, message.toolCallId(), history)) {
-				appendToolCallPanel(message.toolName());
+				appendToolCallPanel(message);
 			}
 		}
-		case TOOL_RESULT -> appendToolCallPanel(message.toolName());
+		case TOOL_RESULT -> appendToolCallPanel(message);
 		default -> appendMessageBubble(new ChatBubble(message), message.role());
 		}
 	}
@@ -572,9 +569,9 @@ public final class ChatsPanel extends JPanel {
 		return false;
 	}
 
-	private void appendToolCallPanel(String toolName) {
+	private void appendToolCallPanel(ChatMessage message) {
 		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
-		messagesPanel.add(ToolCallPanel.completed(toolName), index);
+		messagesPanel.add(ToolCallPanel.fromHistory(message), index);
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
 		updateContentView();
@@ -629,23 +626,23 @@ public final class ChatsPanel extends JPanel {
 		return new StreamedAssistantRow(bubble, row);
 	}
 
-	private void showRunningTool(String toolCallId, String toolName) {
-		if (activeToolPanels.containsKey(toolCallId)) {
+	private void showRunningTool(StreamListener.ToolRequestEvent request) {
+		if (activeToolPanels.containsKey(request.id())) {
 			return;
 		}
 
-		ToolCallPanel panel = ToolCallPanel.running(toolName);
+		ToolCallPanel panel = ToolCallPanel.running(request);
 		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
 		messagesPanel.add(panel, index);
-		activeToolPanels.put(toolCallId, panel);
+		activeToolPanels.put(request.id(), panel);
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
 		updateContentView();
 		SwingUtilities.invokeLater(this::scrollToBottom);
 	}
 
-	private void finishToolCall(String toolCallId) {
-		ToolCallPanel panel = activeToolPanels.remove(toolCallId);
+	private void finishToolCall(StreamListener.ToolResultEvent result) {
+		ToolCallPanel panel = activeToolPanels.remove(result.id());
 		if (panel == null) {
 			return;
 		}

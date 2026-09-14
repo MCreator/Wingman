@@ -92,7 +92,7 @@ public class WingmanPreferencesPanel extends JPanel {
 		providers.setSelectedValue(AcpProviders.selected(), true);
 		show(providers.getSelectedValue());
 
-		// Listeners are added after the initial state is shown, so only changes by the user enable apply
+		// Listeners are added after the initial state is shown, so only changes by the user enable to apply
 		providers.addListSelectionListener(e -> {
 			if (!e.getValueIsAdjusting() && providers.getSelectedValue() != null) {
 				show(providers.getSelectedValue());
@@ -140,12 +140,12 @@ public class WingmanPreferencesPanel extends JPanel {
 		private final JLabel status = new JLabel();
 
 		ProviderCellRenderer() {
-			setLayout(new BorderLayout(8, 0));
+			setLayout(new BorderLayout(4, 0));
 			add(icon, BorderLayout.WEST);
 
 			JComponent text = PanelUtils.column(2, name, description, status);
 			text.setOpaque(false);
-			text.setBorder(BorderFactory.createEmptyBorder(8, 0, 8, 0));
+			text.setBorder(BorderFactory.createEmptyBorder(0, 5, 0, 0));
 			add(text, BorderLayout.CENTER);
 
 			ComponentUtils.deriveFont(name, 14);
@@ -169,9 +169,8 @@ public class WingmanPreferencesPanel extends JPanel {
 						.orElse(L10N.t("wingman.provider.not_installed")));
 			}
 
-			Color foreground = isSelected ? list.getSelectionForeground() : list.getForeground();
 			Color altForeground = isSelected ? list.getSelectionForeground() : Theme.current().getAltForegroundColor();
-			name.setForeground(foreground);
+			name.setForeground(isSelected ? list.getSelectionForeground() : list.getForeground());
 			description.setForeground(altForeground);
 			status.setForeground(executable != null && executable.isEmpty() ? NOT_INSTALLED_COLOR : altForeground);
 			setBackground(isSelected ? list.getSelectionBackground() : list.getBackground());

@@ -19,9 +19,7 @@
 
 package net.mcreator.wingman.acp.provider;
 
-import net.mcreator.wingman.acp.provider.impl.CursorProvider;
-import net.mcreator.wingman.acp.provider.impl.CustomAcpProvider;
-import net.mcreator.wingman.acp.provider.impl.GitHubCopilotProvider;
+import net.mcreator.wingman.acp.provider.impl.*;
 import net.mcreator.wingman.preferences.WingmanPreferences;
 
 import java.util.List;
@@ -31,7 +29,15 @@ public final class AcpProviders {
 
 	public static final AcpProvider CUSTOM = new CustomAcpProvider();
 
-	public static final List<AcpProvider> ALL = List.of(new CursorProvider(), new GitHubCopilotProvider(), CUSTOM);
+	public static final List<AcpProvider> ALL = List.of(
+			//@formatter:off
+			new CursorProvider(),
+			new GitHubCopilotProvider(),
+			new ClaudeCodeProvider(),
+			new CodexProvider(),
+			CUSTOM
+			//@formatter:on
+	);
 
 	public static Optional<AcpProvider> byId(String id) {
 		return ALL.stream().filter(provider -> provider.id().equals(id)).findFirst();

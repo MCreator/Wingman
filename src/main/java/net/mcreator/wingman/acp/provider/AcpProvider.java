@@ -83,7 +83,7 @@ public abstract class AcpProvider {
 	}
 
 	@Override public String toString() {
-		return name;
+		return name();
 	}
 
 }

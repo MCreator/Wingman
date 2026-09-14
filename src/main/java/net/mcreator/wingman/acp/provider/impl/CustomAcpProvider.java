@@ -30,7 +30,16 @@ import net.mcreator.wingman.preferences.WingmanPreferences;
 public final class CustomAcpProvider extends StdioAcpProvider {
 
 	public CustomAcpProvider() {
-		super("custom", L10N.t("wingman.provider.custom"), L10N.t("wingman.provider.custom.description"), null);
+		// Providers are created before MCreator loads translations, so the localized texts are resolved on access
+		super("custom", "Custom ACP agent", "", null);
+	}
+
+	@Override public String name() {
+		return L10N.t("wingman.provider.custom");
+	}
+
+	@Override public String description() {
+		return L10N.t("wingman.provider.custom.description");
 	}
 
 	@Override public AgentCommand command() {

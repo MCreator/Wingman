@@ -384,8 +384,8 @@ public final class ChatsPanel extends JPanel {
 				sendCurrentMessage();
 		});
 		sendButton.setToolTipText(L10N.t("wingman.send"));
-		sendButton.putClientProperty("JButton.buttonType", "roundRect");
-		sendButton.setMargin(new Insets(1, 1, 1, 1));
+		sendButton.putClientProperty("JButton.buttonType", "borderless");
+		sendButton.setMargin(new Insets(2, 2, 2, 2));
 
 		JScrollPane inputScroll = new JScrollPane(inputArea);
 		inputScroll.setBorder(BorderFactory.createEmptyBorder());

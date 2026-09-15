@@ -88,6 +88,10 @@ public final class ChatsPanel extends JPanel {
 		conversationsButton.setToolTipText(L10N.t("wingman.conversations"));
 		conversationsButton.addActionListener(_ -> showConversationsMenu());
 
+		JButton newConversationButton = new JButton(UIRES.get("wingman.add"));
+		newConversationButton.setToolTipText(L10N.t("wingman.conversation.new"));
+		newConversationButton.addActionListener(_ -> startNewConversation());
+
 		JButton settingsButton = new JButton(UIRES.get("settings"));
 		settingsButton.setToolTipText(L10N.t("wingman.settings"));
 		settingsButton.addActionListener(_ -> new PreferencesDialog(mcreator, L10N.t("wingman.preferences.page")));
@@ -95,8 +99,9 @@ public final class ChatsPanel extends JPanel {
 		JToolBar headerActions = new JToolBar();
 		headerActions.setFloatable(false);
 		headerActions.setOpaque(false);
-		headerActions.add(Box.createHorizontalGlue());
 		headerActions.add(settingsButton);
+		headerActions.add(Box.createHorizontalGlue());
+		headerActions.add(newConversationButton);
 		headerActions.add(conversationsButton);
 		add(headerActions, BorderLayout.NORTH);
 
@@ -184,13 +189,12 @@ public final class ChatsPanel extends JPanel {
 		popup.setBackground(Theme.current().getSecondAltBackgroundColor());
 		popup.setMaximumVisibleRows(18);
 
-		JMenuItem newConversationItem = new JMenuItem(L10N.t("wingman.conversation.new"), UIRES.get("16px.add"));
-		newConversationItem.addActionListener(_ -> startNewConversation());
-		popup.add(newConversationItem);
-
 		List<ChatConversation.Summary> conversations = historyStorage.listSummaries();
-		if (!conversations.isEmpty()) {
-			popup.addSeparator();
+		if (conversations.isEmpty()) {
+			JMenuItem emptyItem = new JMenuItem(L10N.t("wingman.conversations.empty"));
+			emptyItem.setEnabled(false);
+			popup.add(emptyItem);
+		} else {
 			String activeConversationId = activeConversation.id();
 			for (ChatConversation.Summary conversation : conversations) {
 				popup.add(buildConversationMenuRow(popup, conversation, activeConversationId));

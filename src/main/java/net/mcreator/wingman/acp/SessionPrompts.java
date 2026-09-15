@@ -30,7 +30,7 @@ import java.util.List;
  * Builds the first prompt of an ACP session. ACP has no system prompt, so the agent is told its purpose at the
  * start of the first prompt, followed by the local history of the conversation if the agent has no context of it yet.
  */
-final class SessionPrompts {
+public final class SessionPrompts {
 
 	private static final String SESSION_INSTRUCTIONS = """
 			You are MCreator Wingman, an assistant running inside MCreator, a Minecraft mod maker. The working directory \
@@ -73,7 +73,7 @@ final class SessionPrompts {
 		return prompt.append(messageText).toString();
 	}
 
-	private static String toTranscript(List<ChatMessage> history) {
+	public static String toTranscript(List<ChatMessage> history) {
 		StringBuilder transcript = new StringBuilder();
 		for (ChatMessage message : history) {
 			String entry = switch (message.role()) {

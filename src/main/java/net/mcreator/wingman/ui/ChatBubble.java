@@ -51,7 +51,7 @@ final class ChatBubble extends JPanel {
 		caret.setSelectionVisible(true);
 
 		htmlBody = new JEditorPane();
-		htmlBody.setContentType("text/html");
+		htmlBody.setEditorKit(new WrappingHtmlEditorKit()); // text/html kit that wraps long words and <pre> blocks
 		htmlBody.setEditable(false);
 		htmlBody.setFocusable(true);
 		htmlBody.setOpaque(false);

@@ -41,7 +41,7 @@ public final class ChatsPanel extends JPanel {
 	private static final String INPUT_PLACEHOLDER = L10N.t("wingman.input.placeholder");
 
 	private static final int COMPOSER_MIN_ROWS = 2;
-	private static final int COMPOSER_MAX_ROWS = 8;
+	private static final int COMPOSER_MAX_ROWS = 9;
 
 	private final ScrollablePanel messagesPanel = new ScrollablePanel();
 	private final JScrollPane messagesScroll;

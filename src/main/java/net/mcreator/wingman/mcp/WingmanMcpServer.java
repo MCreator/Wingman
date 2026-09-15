@@ -24,6 +24,7 @@ import net.mcreator.io.mcp.transport.HttpMcpTransport;
 import net.mcreator.ui.MCreator;
 import net.mcreator.ui.mcp.MCreatorMcp;
 import net.mcreator.util.NetworkUtils;
+import net.mcreator.wingman.data.ChatHistoryStorage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -47,6 +48,7 @@ public final class WingmanMcpServer implements Closeable {
 			throw new IOException("No available port for the MCreator MCP server");
 
 		this.mcp = new MCreatorMcp(new HttpMcpTransport(port), () -> mcreator);
+		mcp.server().registerTool(new ChatHistoryTool(new ChatHistoryStorage(mcreator)));
 		try {
 			mcp.start();
 		} catch (IOException | RuntimeException e) {

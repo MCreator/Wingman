@@ -18,7 +18,7 @@ final class ToolCallPanel extends JPanel {
 
 	private ToolCallPanel(String toolName, boolean running) {
 		super(new BorderLayout());
-		this.toolName = toolName;
+
 		setOpaque(false);
 		setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
 
@@ -34,6 +34,8 @@ final class ToolCallPanel extends JPanel {
 		content.add(loader);
 		content.add(label);
 		add(content, BorderLayout.CENTER);
+
+		setToolName(toolName);
 	}
 
 	static ToolCallPanel running(StreamListener.ToolRequestEvent requestEvent) {
@@ -45,7 +47,7 @@ final class ToolCallPanel extends JPanel {
 	}
 
 	void setToolName(String toolName) {
-		this.toolName = toolName;
+		this.toolName = toolName.replaceAll("mcreator.*?: ", "");
 		label.setText(labelText(loader.isVisible()));
 		revalidate();
 		repaint();

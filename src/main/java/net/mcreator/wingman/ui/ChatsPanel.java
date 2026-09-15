@@ -58,6 +58,7 @@ public final class ChatsPanel extends JPanel {
 	private final Timer resizeDebounceTimer;
 	private final ContextUsageBar contextUsageBar;
 	private final Map<String, ToolCallPanel> activeToolPanels = new LinkedHashMap<>();
+
 	// Conversations that already got a local history checkpoint since this MCreator instance was opened
 	private final Set<String> checkpointedConversations = new HashSet<>();
 

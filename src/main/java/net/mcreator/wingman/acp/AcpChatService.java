@@ -191,6 +191,7 @@ public final class AcpChatService extends AssistantService {
 				// The history the agent replays while loading is ignored, the local history is already shown
 				client.loadSession(new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), List.of()));
 				knownSessions.add(sessionId);
+				mcreator.getApplication().getAnalytics().trackEvent("wingman", "wingman_chat_resume");
 				return new Session(sessionId, false);
 			} catch (RuntimeException e) {
 				// The session may belong to another agent or be gone, a new one is started with the history relayed
@@ -201,6 +202,7 @@ public final class AcpChatService extends AssistantService {
 		sessionId = client.newSession(new AcpSchema.NewSessionRequest(workspaceDirectory(), List.of())).sessionId();
 		knownSessions.add(sessionId);
 		conversation.setSessionId(sessionId);
+		mcreator.getApplication().getAnalytics().trackEvent("wingman", "wingman_chat_new");
 		return new Session(sessionId, true);
 	}
 

@@ -27,6 +27,8 @@ public interface StreamListener {
 
 	void onToolRequest(ToolRequestEvent request);
 
+	void onToolRenamed(ToolRenameEvent rename);
+
 	void onToolResult(ToolResultEvent result);
 
 	void onCompleteResponse(String finalText);
@@ -36,6 +38,9 @@ public interface StreamListener {
 	PermissionDecision onPermissionRequest(PermissionRequest request);
 
 	record ToolRequestEvent(String id, String name, ToolKind kind, String arguments) {
+	}
+
+	record ToolRenameEvent(String id, String name) {
 	}
 
 	record ToolResultEvent(String id, String name, ToolKind kind, String result) {

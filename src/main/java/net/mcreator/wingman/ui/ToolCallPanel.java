@@ -12,7 +12,7 @@ import java.awt.*;
 
 final class ToolCallPanel extends JPanel {
 
-	private final String toolName;
+	private String toolName;
 	private final JLabel loader;
 	private final JLabel label;
 
@@ -42,6 +42,13 @@ final class ToolCallPanel extends JPanel {
 
 	static ToolCallPanel fromHistory(ChatMessage message) {
 		return new ToolCallPanel(message.toolName(), false);
+	}
+
+	void setToolName(String toolName) {
+		this.toolName = toolName;
+		label.setText(labelText(loader.isVisible()));
+		revalidate();
+		repaint();
 	}
 
 	void markCompleted() {

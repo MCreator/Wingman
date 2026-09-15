@@ -71,6 +71,11 @@ final class ActiveRequest extends TurnAssembler {
 		listener.onToolRequest(new StreamListener.ToolRequestEvent(id, name, toKind(kind), arguments));
 	}
 
+	@Override void onToolRenamed(String id, String name) {
+		conversation.renameToolCall(id, name);
+		listener.onToolRenamed(new StreamListener.ToolRenameEvent(id, name));
+	}
+
 	@Override void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String result) {
 		conversation.addMessage(ChatMessage.toolResult(id, name, result));
 		listener.onToolResult(new StreamListener.ToolResultEvent(id, name, toKind(kind), result));

@@ -28,6 +28,9 @@ import java.util.*;
 /**
  * Assembles the session updates of agent turns. Text and thoughts are accumulated into one response text with
  * thoughts wrapped in thinking tags, and each tool call is reported once when it starts and once when it finishes.
+ * A tool call is named after the title the agent reports for it. Agents may report a placeholder title before they
+ * have parsed the call input (e.g. Cursor reports MCP calls as "MCP: tool" while their arguments are still being
+ * streamed) and the real one only later, e.g. with the permission request, so a later title renames the call.
  */
 abstract class TurnAssembler {
 
@@ -66,6 +69,11 @@ abstract class TurnAssembler {
 	 * @param kind Kind of the tool as reported by the agent, may be null
 	 */
 	abstract void onToolRequest(String id, String name, @Nullable AcpSchema.ToolKind kind, String arguments);
+
+	/**
+	 * Called when a tool call already reported as requested gets a different title from the agent
+	 */
+	abstract void onToolRenamed(String id, String name);
 
 	/**
 	 * @param kind Kind of the tool as reported by the agent, may be null
@@ -122,15 +130,22 @@ abstract class TurnAssembler {
 		}
 	}
 
+	/**
+	 * @return Name of the tool call: the given title, or the kind if there is no title. A call already reported
+	 * with a different name is renamed to the given title, as the latest title is the most descriptive one
+	 */
 	String toolName(String id, @Nullable String title, @Nullable AcpSchema.ToolKind kind) {
+		String reported = title != null && !title.isBlank() ? title.trim() : null;
 		String known = toolNames.get(id);
-		if (known != null) {
-			return known;
+		if (known == null) {
+			return reported != null ? reported : kind != null ? kind.name().toLowerCase(Locale.ROOT) : "tool";
 		}
-		if (title != null && !title.isBlank()) {
-			return title.trim();
+		if (reported != null && !reported.equals(known)) {
+			toolNames.put(id, reported);
+			onToolRenamed(id, reported);
+			return reported;
 		}
-		return kind != null ? kind.name().toLowerCase(Locale.ROOT) : "tool";
+		return known;
 	}
 
 	/**

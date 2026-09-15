@@ -71,6 +71,25 @@ public final class ChatConversation {
 		persist();
 	}
 
+	public void renameToolCall(String toolCallId, String toolName) {
+		boolean updated = false;
+		synchronized (lock) {
+			for (int i = 0; i < messages.size(); i++) {
+				ChatMessage message = messages.get(i);
+				if (toolCallId.equals(message.toolCallId()) && !toolName.equals(message.toolName())) {
+					messages.set(i, message.withToolName(toolName));
+					updated = true;
+				}
+			}
+			if (updated) {
+				updatedAt = System.currentTimeMillis();
+			}
+		}
+		if (updated) {
+			persist();
+		}
+	}
+
 	public void updateLastAssistantThinkingDuration(int thinkingDurationSeconds) {
 		boolean updated = false;
 		synchronized (lock) {

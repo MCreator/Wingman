@@ -60,6 +60,11 @@ public record ChatMessage(Role role, String initialText, Integer thinkingDuratio
 		return initialText;
 	}
 
+	public ChatMessage withToolName(String toolName) {
+		return new ChatMessage(role, initialText, thinkingDurationSeconds, toolCallId, toolName, toolArguments,
+				toolResult);
+	}
+
 	public static ChatMessage system(String text) {
 		return new ChatMessage(Role.SYSTEM, text);
 	}

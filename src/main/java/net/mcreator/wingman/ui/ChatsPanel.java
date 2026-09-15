@@ -457,6 +457,10 @@ public final class ChatsPanel extends JPanel {
 				});
 			}
 
+			@Override public void onToolRenamed(StreamListener.ToolRenameEvent rename) {
+				SwingUtilities.invokeLater(() -> renameToolCall(rename));
+			}
+
 			@Override public void onToolResult(StreamListener.ToolResultEvent result) {
 				SwingUtilities.invokeLater(() -> {
 					finishToolCall(result);
@@ -644,6 +648,13 @@ public final class ChatsPanel extends JPanel {
 		messagesPanel.repaint();
 		updateContentView();
 		SwingUtilities.invokeLater(this::scrollToBottom);
+	}
+
+	private void renameToolCall(StreamListener.ToolRenameEvent rename) {
+		ToolCallPanel panel = activeToolPanels.get(rename.id());
+		if (panel != null) {
+			panel.setToolName(rename.name());
+		}
 	}
 
 	private void finishToolCall(StreamListener.ToolResultEvent result) {

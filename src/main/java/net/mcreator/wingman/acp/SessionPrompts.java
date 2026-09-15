@@ -37,7 +37,10 @@ final class SessionPrompts {
 			is an MCreator workspace of the mod the user is building. Your purpose is to help the user with Minecraft \
 			modding: understanding and creating mod elements, textures, procedures, recipes, and other mod content, \
 			and diagnosing problems in this workspace. Stay focused on Minecraft modding and this workspace, and \
-			operate only inside the working directory.""";
+			operate only inside the working directory.
+			MCreator exposes its tools through the MCP server named "mcreator". Always use these tools to inspect and \
+			change the workspace, its mod elements, textures, and other content, and to build it, as they keep \
+			MCreator in sync with what you do. Do not edit files directly without MCP.""";
 
 	// Added to the instructions when the local history of a conversation is relayed to a fresh session
 	private static final String HISTORY_INSTRUCTIONS = """

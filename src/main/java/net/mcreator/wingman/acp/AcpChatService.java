@@ -59,6 +59,9 @@ public final class AcpChatService extends AssistantService {
 	private final MCreator mcreator;
 	private final Supplier<AcpProvider> providerSupplier;
 
+	// MCreator MCP server given to each session, null if there is none
+	@Nullable private final AcpSchema.McpServer mcpServer;
+
 	private AcpProvider provider;
 	private AcpSyncClient client;
 	private List<AcpSchema.AuthMethod> authMethods = List.of();
@@ -70,11 +73,14 @@ public final class AcpChatService extends AssistantService {
 
 	/**
 	 * @param providerSupplier Provider of the agent to connect to, queried whenever a connection is made
+	 * @param mcpServer        MCreator MCP server the agent connects to in each session, null if there is none
 	 */
-	public AcpChatService(MCreator mcreator, Supplier<AcpProvider> providerSupplier) {
+	public AcpChatService(MCreator mcreator, Supplier<AcpProvider> providerSupplier,
+			@Nullable AcpSchema.McpServer mcpServer) {
 		super(mcreator);
 		this.mcreator = mcreator;
 		this.providerSupplier = providerSupplier;
+		this.mcpServer = mcpServer;
 	}
 
 	private synchronized AcpSyncClient client() {
@@ -189,7 +195,8 @@ public final class AcpChatService extends AssistantService {
 		if (sessionId != null && client.getAgentCapabilities().supportsLoadSession()) {
 			try {
 				// The history the agent replays while loading is ignored, the local history is already shown
-				client.loadSession(new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), List.of()));
+				client.loadSession(
+						new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), mcpServers(client)));
 				knownSessions.add(sessionId);
 				mcreator.getApplication().getAnalytics().trackEvent("wingman", "wingman_chat_resume");
 				return new Session(sessionId, false);
@@ -199,11 +206,22 @@ public final class AcpChatService extends AssistantService {
 			}
 		}
 
-		sessionId = client.newSession(new AcpSchema.NewSessionRequest(workspaceDirectory(), List.of())).sessionId();
+		sessionId = client.newSession(new AcpSchema.NewSessionRequest(workspaceDirectory(), mcpServers(client)))
+				.sessionId();
 		knownSessions.add(sessionId);
 		conversation.setSessionId(sessionId);
 		mcreator.getApplication().getAnalytics().trackEvent("wingman", "wingman_chat_new");
 		return new Session(sessionId, true);
+	}
+
+	private List<AcpSchema.McpServer> mcpServers(AcpSyncClient client) {
+		if (mcpServer == null)
+			return List.of();
+		if (!client.getAgentCapabilities().supportsMcpHttp()) {
+			LOG.warn("Agent {} does not support HTTP MCP servers, it will not have MCreator tools", provider.name());
+			return List.of();
+		}
+		return List.of(mcpServer);
 	}
 
 	@Override public void cancel(ChatConversation conversation) {

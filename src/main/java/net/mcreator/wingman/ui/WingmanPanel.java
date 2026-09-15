@@ -22,18 +22,29 @@ package net.mcreator.wingman.ui;
 import net.mcreator.ui.MCreator;
 import net.mcreator.wingman.acp.AcpChatService;
 import net.mcreator.wingman.acp.provider.AcpProviders;
+import net.mcreator.wingman.mcp.WingmanMcpServer;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
+import java.io.IOException;
 
 public class WingmanPanel extends JPanel {
 
+	private static final Logger LOG = LogManager.getLogger(WingmanPanel.class);
+
+	// MCP server exposing this window to the agent, null if it could not be started so the agent works without it
+	@Nullable private final WingmanMcpServer mcpServer;
 	private final AcpChatService assistantService;
 
 	public WingmanPanel(MCreator mcreator) {
 		super(new BorderLayout());
 
-		this.assistantService = new AcpChatService(mcreator, AcpProviders::selected);
+		this.mcpServer = startMcpServer(mcreator);
+		this.assistantService = new AcpChatService(mcreator, AcpProviders::selected,
+				mcpServer != null ? mcpServer.acpSchemaMCPDefinition() : null);
 
 		ChatsPanel chatsPanel = new ChatsPanel(mcreator, assistantService);
 		add(chatsPanel, BorderLayout.CENTER);
@@ -48,6 +59,17 @@ public class WingmanPanel extends JPanel {
 
 	public void close() {
 		assistantService.close();
+		if (mcpServer != null)
+			mcpServer.close();
+	}
+
+	@Nullable private static WingmanMcpServer startMcpServer(MCreator mcreator) {
+		try {
+			return new WingmanMcpServer(mcreator);
+		} catch (IOException | RuntimeException e) {
+			LOG.warn("Failed to start MCP server for Wingman, the agent will not have MCreator tools", e);
+			return null;
+		}
 	}
 
 }

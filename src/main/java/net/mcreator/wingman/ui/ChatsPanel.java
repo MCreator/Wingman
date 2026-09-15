@@ -68,6 +68,7 @@ public final class ChatsPanel extends JPanel {
 
 	private final MCreator mcreator;
 
+	// TODO: composer text area should increase visible rows if more text is entered, but only up to 8 rows, and minimum 2 rows
 	public ChatsPanel(MCreator mcreator, AssistantService assistantService) {
 		super(new BorderLayout(0, 5));
 		this.mcreator = mcreator;

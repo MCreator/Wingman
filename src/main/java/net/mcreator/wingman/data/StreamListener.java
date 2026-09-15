@@ -23,7 +23,9 @@ import java.util.Set;
 
 public interface StreamListener {
 
-	void onPartialResponse(String responseText);
+	void onPartialMessage(ChatMessage message);
+
+	void onMessageFinished(ChatMessage message);
 
 	void onToolRequest(ToolRequestEvent request);
 
@@ -31,7 +33,7 @@ public interface StreamListener {
 
 	void onToolResult(ToolResultEvent result);
 
-	void onCompleteResponse(String finalText);
+	void onCompleteResponse();
 
 	void onError(String errorMessage);
 

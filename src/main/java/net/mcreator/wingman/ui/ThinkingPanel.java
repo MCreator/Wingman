@@ -4,7 +4,9 @@ import net.mcreator.ui.component.CollapsiblePanel;
 import net.mcreator.ui.component.util.ComponentUtils;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.laf.themes.Theme;
+import net.mcreator.wingman.data.ChatMessage;
 
+import javax.annotation.Nullable;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
@@ -20,23 +22,19 @@ final class ThinkingPanel extends JPanel {
 	private final JTextArea body;
 	private final JScrollPane scroll;
 
-	private Long thinkingStartedAtMs;
-	private Integer thinkingDurationSeconds;
-
-	ThinkingPanel() {
+	ThinkingPanel(ChatMessage message, boolean inProgress) {
 		super(new BorderLayout());
 		setOpaque(false);
+		setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
 
-		Color mutedText = mutedThinkingTextColor();
-
-		body = new JTextArea();
+		body = new JTextArea(message.text());
 		body.setEditable(false);
 		body.setFocusable(true);
 		body.setLineWrap(true);
 		body.setWrapStyleWord(true);
 		body.setOpaque(false);
 		body.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
-		body.setForeground(mutedText);
+		body.setForeground(mutedThinkingTextColor());
 		body.setCaretColor(new Color(0, 0, 0, 0));
 		ComponentUtils.deriveFont(body, 12);
 		DefaultCaret caret = (DefaultCaret) body.getCaret();
@@ -51,80 +49,55 @@ final class ThinkingPanel extends JPanel {
 		scroll.setOpaque(false);
 		scroll.getViewport().setBackground(new Color(0, 0, 0, 16));
 
-		collapsible = new CollapsiblePanel(L10N.t("wingman.thinking"), scroll, false);
+		collapsible = new CollapsiblePanel(title(inProgress, message.thinkingDurationSeconds()), scroll, false);
 		collapsible.setBorder(BorderFactory.createEmptyBorder());
 		collapsible.setSmallArrows(true);
+		collapsible.toggleVisibility(inProgress);
 		add(collapsible, BorderLayout.CENTER);
-		setVisible(false);
 
 		addComponentListener(new ComponentAdapter() {
 			@Override public void componentResized(ComponentEvent e) {
-				if (isVisible()) {
-					updateScrollSize();
-				}
+				updateScrollSize();
 			}
 		});
 	}
 
-	void update(String thinkingText, boolean inProgress, Integer rememberedDurationSeconds) {
-		if (rememberedDurationSeconds != null) {
-			thinkingDurationSeconds = rememberedDurationSeconds;
-			thinkingStartedAtMs = null;
-		} else if (inProgress) {
-			if (thinkingStartedAtMs == null) {
-				thinkingStartedAtMs = System.currentTimeMillis();
-			}
-		} else if (thinkingStartedAtMs != null) {
-			thinkingDurationSeconds = toSeconds(System.currentTimeMillis() - thinkingStartedAtMs);
-			thinkingStartedAtMs = null;
-		}
-
-		String text = thinkingText == null ? "" : thinkingText;
-		body.setText(text);
-		boolean hasThinking = inProgress || !text.isBlank();
-		setVisible(hasThinking);
-		if (!hasThinking) {
-			return;
-		}
-
-		collapsible.setTitle(titleForState(inProgress));
-		collapsible.toggleVisibility(inProgress);
+	void update(String thinkingText) {
+		body.setText(thinkingText);
 		updateScrollSize();
-		if (inProgress) {
-			body.setCaretPosition(body.getDocument().getLength());
-			SwingUtilities.invokeLater(() -> {
-				JScrollBar bar = scroll.getVerticalScrollBar();
-				bar.setValue(bar.getMaximum());
-			});
-		}
+		body.setCaretPosition(body.getDocument().getLength());
+		SwingUtilities.invokeLater(() -> {
+			JScrollBar bar = scroll.getVerticalScrollBar();
+			bar.setValue(bar.getMaximum());
+		});
 		revalidate();
 		repaint();
 	}
 
-	Integer getThinkingDurationSeconds() {
-		return thinkingDurationSeconds;
+	void finish(ChatMessage message) {
+		body.setText(message.text());
+		collapsible.setTitle(title(false, message.thinkingDurationSeconds()));
+		collapsible.toggleVisibility(false);
+		updateScrollSize();
+		revalidate();
+		repaint();
 	}
 
-	private String titleForState(boolean inProgress) {
+	private static String title(boolean inProgress, @Nullable Integer thinkingDurationSeconds) {
 		if (inProgress) {
 			return L10N.t("wingman.thinking");
 		}
-		if (thinkingDurationSeconds != null) {
-			return formatThoughtDuration(thinkingDurationSeconds);
+		if (thinkingDurationSeconds == null) {
+			return L10N.t("wingman.thought");
 		}
-		return body.getText().isBlank() ? L10N.t("wingman.thinking") : L10N.t("wingman.thought");
-	}
-
-	private static String formatThoughtDuration(int seconds) {
-		return seconds == 1 ? L10N.t("wingman.thought_for_second") : L10N.t("wingman.thought_for_seconds", seconds);
-	}
-
-	private static int toSeconds(long durationMs) {
-		return Math.max(1, (int) Math.ceil(durationMs / 1000.0));
+		return thinkingDurationSeconds == 1 ?
+				L10N.t("wingman.thought_for_second") :
+				L10N.t("wingman.thought_for_seconds", thinkingDurationSeconds);
 	}
 
 	private void updateScrollSize() {
-		int width = getWidth();
+		Insets insets = getInsets();
+		int width = getWidth() - insets.left - insets.right;
 		if (width <= 0) {
 			return;
 		}
@@ -145,10 +118,7 @@ final class ThinkingPanel extends JPanel {
 	}
 
 	@Override public Dimension getMaximumSize() {
-		if (!isVisible()) {
-			return new Dimension(Integer.MAX_VALUE, 0);
-		}
-		Dimension preferred = getPreferredSize();
-		return new Dimension(Integer.MAX_VALUE, preferred.height);
+		return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
 	}
+
 }

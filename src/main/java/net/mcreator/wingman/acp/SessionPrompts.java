@@ -21,7 +21,6 @@ package net.mcreator.wingman.acp;
 
 import net.mcreator.util.StringUtils;
 import net.mcreator.wingman.data.ChatMessage;
-import net.mcreator.wingman.util.ThinkingContentParser;
 
 import javax.annotation.Nullable;
 import java.util.List;
@@ -78,11 +77,8 @@ public final class SessionPrompts {
 		for (ChatMessage message : history) {
 			String entry = switch (message.role()) {
 				case USER -> "User: " + message.text();
-				case ASSISTANT -> {
-					// Thoughts are not relayed, only the response shown to the user
-					String response = ThinkingContentParser.parse(message.text(), true).response();
-					yield response.isBlank() ? null : "Assistant: " + response;
-				}
+				case ASSISTANT -> "Assistant: " + message.text();
+				case THOUGHT -> null; // Thoughts are not relayed, only the responses shown to the user
 				case TOOL_REQUEST -> "Tool call " + message.toolName() + ": " + abbreviate(message.toolArguments());
 				case TOOL_RESULT -> "Tool result " + message.toolName() + ": " + abbreviate(message.toolResult());
 				case SYSTEM -> null; // UI-only messages are not relayed

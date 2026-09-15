@@ -21,33 +21,39 @@ package net.mcreator.wingman.acp;
 
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import com.google.gson.Gson;
+import net.mcreator.wingman.data.ChatMessage;
 
 import javax.annotation.Nullable;
 import java.util.*;
 
 /**
- * Assembles the session updates of agent turns. Text and thoughts are accumulated into one response text with
- * thoughts wrapped in thinking tags, and each tool call is reported once when it starts and once when it finishes.
- * A tool call is named after the title the agent reports for it. Agents may report a placeholder title before they
- * have parsed the call input (e.g. Cursor reports MCP calls as "MCP: tool" while their arguments are still being
- * streamed) and the real one only later, e.g. with the permission request, so a later title renames the call.
+ * Assembles the session updates of agent turns into messages. Consecutive thought chunks form one thought message and
+ * consecutive text chunks one assistant message; such a message is reported while it grows and finished when a chunk
+ * of another type or a new tool call arrives, so the messages of a turn are reported in the order the agent produced
+ * them. Each tool call is reported once when it starts and once when it finishes. A tool call is named after the
+ * title the agent reports for it. Agents may report a placeholder title before they have parsed the call input (e.g.
+ * Cursor reports MCP calls as "MCP: tool" while their arguments are still being streamed) and the real one only
+ * later, e.g. with the permission request, so a later title renames the call.
  */
 abstract class TurnAssembler {
 
 	private static final Gson GSON = new Gson();
 
-	private final StringBuilder responseBuilder = new StringBuilder();
 	private final Map<String, String> toolNames = new HashMap<>();
+
 	// Kinds of the tool calls seen so far, as a permission request for a call may come without one
 	private final Map<String, AcpSchema.ToolKind> toolKinds = new HashMap<>();
 	private final Set<String> finishedTools = new HashSet<>();
 
-	private boolean thinking;
+	// The thought or assistant message currently being streamed, if any
+	@Nullable private ChatMessage.Role messageRole;
+	private final StringBuilder messageText = new StringBuilder();
+	private long messageStartedAtMs;
 
 	void handle(AcpSchema.SessionUpdate update) {
 		switch (update) {
-		case AcpSchema.AgentThoughtChunk chunk -> appendText(chunk.content(), true);
-		case AcpSchema.AgentMessageChunk chunk -> appendText(chunk.content(), false);
+		case AcpSchema.AgentThoughtChunk chunk -> appendText(chunk.content(), ChatMessage.Role.THOUGHT);
+		case AcpSchema.AgentMessageChunk chunk -> appendText(chunk.content(), ChatMessage.Role.ASSISTANT);
 		case AcpSchema.ToolCall call ->
 				onToolCall(call.toolCallId(), call.title(), call.kind(), call.status(), call.content(), call.rawInput(),
 						call.rawOutput());
@@ -61,9 +67,14 @@ abstract class TurnAssembler {
 	}
 
 	/**
-	 * Called with the whole response text accumulated so far whenever it grows
+	 * Called with the message being streamed whenever its text grows
 	 */
-	abstract void onResponseText(String responseText);
+	abstract void onPartialMessage(ChatMessage message);
+
+	/**
+	 * Called with the final form of a message reported partially before
+	 */
+	abstract void onMessageFinished(ChatMessage message);
 
 	/**
 	 * @param kind Kind of the tool as reported by the agent, may be null
@@ -81,32 +92,46 @@ abstract class TurnAssembler {
 	abstract void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String result);
 
 	/**
-	 * Closes an open thought and returns the response text accumulated so far, starting a new response
+	 * Finishes the message being streamed, if any. Messages without text are dropped without being reported.
 	 */
-	String finishResponse() {
-		if (thinking) {
-			responseBuilder.append("</thinking>");
-			thinking = false;
+	void finishMessage() {
+		if (messageRole == null) {
+			return;
 		}
-		String text = responseBuilder.toString();
-		responseBuilder.setLength(0);
-		return text;
+		ChatMessage message = currentMessage(true);
+		messageRole = null;
+		messageText.setLength(0);
+		if (!message.text().isBlank()) {
+			onMessageFinished(message);
+		}
 	}
 
-	private void appendText(@Nullable AcpSchema.ContentBlock content, boolean thought) {
+	private void appendText(@Nullable AcpSchema.ContentBlock content, ChatMessage.Role role) {
 		if (!(content instanceof AcpSchema.TextContent text) || text.text() == null || text.text().isEmpty()) {
 			return;
 		}
-		// Thoughts are wrapped in thinking tags so the chat bubble shows them in its thinking panel
-		if (thought && !thinking) {
-			responseBuilder.append("<thinking>");
-			thinking = true;
-		} else if (!thought && thinking) {
-			responseBuilder.append("</thinking>\n");
-			thinking = false;
+		if (messageRole != role) {
+			finishMessage();
+			messageRole = role;
+			messageStartedAtMs = System.currentTimeMillis();
 		}
-		responseBuilder.append(text.text());
-		onResponseText(responseBuilder.toString());
+		messageText.append(text.text());
+		if (!messageText.toString().isBlank()) {
+			onPartialMessage(currentMessage(false));
+		}
+	}
+
+	private ChatMessage currentMessage(boolean finished) {
+		String text = finished ? messageText.toString().strip() : messageText.toString();
+		if (messageRole == ChatMessage.Role.THOUGHT) {
+			long elapsedMs = System.currentTimeMillis() - messageStartedAtMs;
+			return ChatMessage.thought(text, finished ? thinkingDurationSeconds(elapsedMs) : null);
+		}
+		return ChatMessage.assistant(text);
+	}
+
+	private static int thinkingDurationSeconds(long durationMs) {
+		return Math.max(1, (int) Math.ceil(durationMs / 1000.0));
 	}
 
 	private void onToolCall(@Nullable String id, @Nullable String title, @Nullable AcpSchema.ToolKind kind,
@@ -121,6 +146,7 @@ abstract class TurnAssembler {
 		}
 		AcpSchema.ToolKind knownKind = toolKind(id, kind);
 		if (!toolNames.containsKey(id)) {
+			finishMessage(); // so the text streamed after this call is shown after it
 			toolNames.put(id, name);
 			onToolRequest(id, name, knownKind, toJson(rawInput));
 		}

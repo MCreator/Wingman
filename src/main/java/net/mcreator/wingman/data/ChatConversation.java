@@ -90,24 +90,6 @@ public final class ChatConversation {
 		}
 	}
 
-	public void updateLastAssistantThinkingDuration(int thinkingDurationSeconds) {
-		boolean updated = false;
-		synchronized (lock) {
-			for (int i = messages.size() - 1; i >= 0; i--) {
-				ChatMessage message = messages.get(i);
-				if (message.role() == ChatMessage.Role.ASSISTANT) {
-					messages.set(i, ChatMessage.assistant(message.initialText(), thinkingDurationSeconds));
-					updatedAt = System.currentTimeMillis();
-					updated = true;
-					break;
-				}
-			}
-		}
-		if (updated) {
-			persist();
-		}
-	}
-
 	public String id() {
 		return id;
 	}

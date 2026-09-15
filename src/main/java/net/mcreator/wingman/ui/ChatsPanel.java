@@ -26,7 +26,6 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.atomic.AtomicReference;
 
 public final class ChatsPanel extends JPanel {
 
@@ -62,6 +61,9 @@ public final class ChatsPanel extends JPanel {
 	private final Timer resizeDebounceTimer;
 	private final ContextUsageBar contextUsageBar;
 	private final Map<String, ToolCallPanel> activeToolPanels = new LinkedHashMap<>();
+
+	// The view of the thought or assistant message currently being streamed, null between messages
+	private JComponent streamedMessageView;
 
 	// Conversations that already got a local history checkpoint since this MCreator instance was opened
 	private final Set<String> checkpointedConversations = new HashSet<>();
@@ -287,8 +289,8 @@ public final class ChatsPanel extends JPanel {
 	private void reloadActiveConversationView() {
 		clearMessagesPanel();
 		List<ChatMessage> history = activeConversation.messages();
-		for (int i = 0; i < history.size(); i++) {
-			appendHistoryMessage(history.get(i), i, history);
+		for (ChatMessage message : history) {
+			appendHistoryMessage(message);
 		}
 		inputArea.setText("");
 		refreshContextUsage();
@@ -303,6 +305,7 @@ public final class ChatsPanel extends JPanel {
 
 	private void clearMessagesPanel() {
 		activeToolPanels.clear();
+		streamedMessageView = null;
 		messagesPanel.removeAll();
 		messagesPanel.add(Box.createVerticalGlue());
 		messagesPanel.revalidate();
@@ -466,30 +469,23 @@ public final class ChatsPanel extends JPanel {
 		cancelRequested = false;
 		setRequestInProgress(true);
 		refreshContextUsage();
-		ThinkingHandle thinking = showThinkingIndicator();
-		AtomicReference<StreamedAssistantRow> assistantRowRef = new AtomicReference<>();
+		WorkingIndicator working = showWorkingIndicator();
 
 		StreamListener listener = new StreamListener() {
-			@Override public void onPartialResponse(String responseText) {
-				if (responseText == null || responseText.isBlank())
-					return;
-
+			@Override public void onPartialMessage(ChatMessage message) {
 				SwingUtilities.invokeLater(() -> {
-					thinking.stop();
-					if (assistantRowRef.get() == null) {
-						assistantRowRef.set(appendAssistantBubble());
-					}
-					assistantRowRef.get().bubble()
-							.setText(responseText, responseText.toLowerCase().contains("</thinking>"));
-					messagesPanel.revalidate();
-					messagesPanel.repaint();
-					scrollToBottom();
+					working.stop();
+					showStreamedMessage(message, false);
 				});
+			}
+
+			@Override public void onMessageFinished(ChatMessage message) {
+				SwingUtilities.invokeLater(() -> showStreamedMessage(message, true));
 			}
 
 			@Override public void onToolRequest(StreamListener.ToolRequestEvent request) {
 				SwingUtilities.invokeLater(() -> {
-					thinking.stop();
+					working.stop();
 					showRunningTool(request);
 				});
 			}
@@ -505,23 +501,11 @@ public final class ChatsPanel extends JPanel {
 				});
 			}
 
-			@Override public void onCompleteResponse(String finalText) {
+			@Override public void onCompleteResponse() {
 				SwingUtilities.invokeLater(() -> {
-					thinking.stop();
+					working.stop();
 					hideAllRunningTools();
-					if (finalText != null && !finalText.isBlank()) {
-						if (assistantRowRef.get() == null) {
-							assistantRowRef.set(appendAssistantBubble());
-						}
-						ChatBubble bubble = assistantRowRef.get().bubble();
-						bubble.setText(finalText, true);
-						Integer thinkingDurationSeconds = bubble.getThinkingDurationSeconds();
-						if (thinkingDurationSeconds != null) {
-							activeConversation.updateLastAssistantThinkingDuration(thinkingDurationSeconds);
-						}
-						messagesPanel.revalidate();
-						messagesPanel.repaint();
-					}
+					streamedMessageView = null;
 					if (cancelRequested) {
 						ChatMessage cancelledMessage = ChatMessage.system(L10N.t("wingman.request.cancelled"));
 						activeConversation.addMessage(cancelledMessage);
@@ -535,8 +519,9 @@ public final class ChatsPanel extends JPanel {
 
 			@Override public void onError(String errorMessage) {
 				SwingUtilities.invokeLater(() -> {
-					thinking.stop();
+					working.stop();
 					hideAllRunningTools();
+					streamedMessageView = null;
 					appendSystemError(ChatMessage.requestFailed(errorMessage));
 					setRequestInProgress(false);
 					refreshContextUsage();
@@ -569,17 +554,38 @@ public final class ChatsPanel extends JPanel {
 			appendMessageBubble(new ChatBubble(message), message.role());
 	}
 
-	private void appendHistoryMessage(ChatMessage message, int index, List<ChatMessage> history) {
+	private void appendHistoryMessage(ChatMessage message) {
 		switch (message.role()) {
 		case SYSTEM -> appendSystemError(message);
-		case TOOL_REQUEST -> {
-			if (!hasMatchingToolResultAfter(index, message.toolCallId(), history)) {
-				appendToolCallPanel(message);
-			}
+		case THOUGHT -> appendRow(new ThinkingPanel(message, false));
+		// Tool calls are shown where they were requested; the history only contains calls that got a result
+		case TOOL_REQUEST -> appendRow(ToolCallPanel.fromHistory(message));
+		case TOOL_RESULT -> {
 		}
-		case TOOL_RESULT -> appendToolCallPanel(message);
 		default -> appendMessageBubble(new ChatBubble(message), message.role());
 		}
+	}
+
+	private void showStreamedMessage(ChatMessage message, boolean finished) {
+		if (streamedMessageView == null) {
+			streamedMessageView = message.role() == ChatMessage.Role.THOUGHT ?
+					appendRow(new ThinkingPanel(message, !finished)) :
+					appendMessageBubble(new ChatBubble(message), message.role());
+		} else if (streamedMessageView instanceof ThinkingPanel thinkingPanel) {
+			if (finished) {
+				thinkingPanel.finish(message);
+			} else {
+				thinkingPanel.update(message.text());
+			}
+		} else if (streamedMessageView instanceof ChatBubble bubble) {
+			bubble.setText(message.text());
+		}
+		if (finished) {
+			streamedMessageView = null;
+		}
+		messagesPanel.revalidate();
+		messagesPanel.repaint();
+		scrollToBottom();
 	}
 
 	private void appendSystemError(ChatMessage message) {
@@ -601,30 +607,20 @@ public final class ChatsPanel extends JPanel {
 		return text;
 	}
 
-	private boolean hasMatchingToolResultAfter(int requestIndex, String toolCallId, List<ChatMessage> history) {
-		if (toolCallId == null) {
-			return false;
-		}
-		for (int i = requestIndex + 1; i < history.size(); i++) {
-			ChatMessage historyMessage = history.get(i);
-			if (historyMessage.role() == ChatMessage.Role.TOOL_RESULT && toolCallId.equals(
-					historyMessage.toolCallId())) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private void appendToolCallPanel(ChatMessage message) {
+	/**
+	 * Adds a full-width row before the trailing glue of the messages panel
+	 */
+	private <T extends JComponent> T appendRow(T row) {
 		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
-		messagesPanel.add(ToolCallPanel.fromHistory(message), index);
+		messagesPanel.add(row, index);
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
 		updateContentView();
 		SwingUtilities.invokeLater(this::scrollToBottom);
+		return row;
 	}
 
-	private JPanel appendMessageBubble(ChatBubble bubble, ChatMessage.Role role) {
+	private ChatBubble appendMessageBubble(ChatBubble bubble, ChatMessage.Role role) {
 		JPanel row = new JPanel() {
 			@Override public Dimension getMaximumSize() {
 				return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
@@ -656,35 +652,16 @@ public final class ChatsPanel extends JPanel {
 			bubble.setMaxWidth(target);
 		}
 
-		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
-		messagesPanel.add(row, index);
-		messagesPanel.add(Box.createVerticalStrut(4), index + 1);
-		messagesPanel.revalidate();
-		messagesPanel.repaint();
-		updateContentView();
-		SwingUtilities.invokeLater(this::scrollToBottom);
-		return row;
-	}
-
-	private StreamedAssistantRow appendAssistantBubble() {
-		var bubble = new ChatBubble(ChatMessage.assistant(""));
-		JPanel row = appendMessageBubble(bubble, ChatMessage.Role.ASSISTANT);
-		return new StreamedAssistantRow(bubble, row);
+		appendRow(row);
+		messagesPanel.add(Box.createVerticalStrut(4), messagesPanel.getComponentCount() - 1);
+		return bubble;
 	}
 
 	private void showRunningTool(StreamListener.ToolRequestEvent request) {
 		if (activeToolPanels.containsKey(request.id())) {
 			return;
 		}
-
-		ToolCallPanel panel = ToolCallPanel.running(request);
-		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
-		messagesPanel.add(panel, index);
-		activeToolPanels.put(request.id(), panel);
-		messagesPanel.revalidate();
-		messagesPanel.repaint();
-		updateContentView();
-		SwingUtilities.invokeLater(this::scrollToBottom);
+		activeToolPanels.put(request.id(), appendRow(ToolCallPanel.running(request)));
 	}
 
 	private void renameToolCall(StreamListener.ToolRenameEvent rename) {
@@ -741,13 +718,7 @@ public final class ChatsPanel extends JPanel {
 		row.setOpaque(false);
 		row.setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
 		row.add(text, BorderLayout.CENTER);
-
-		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
-		messagesPanel.add(row, index);
-		messagesPanel.revalidate();
-		messagesPanel.repaint();
-		updateContentView();
-		SwingUtilities.invokeLater(this::scrollToBottom);
+		appendRow(row);
 	}
 
 	private int computeTargetBubbleWidth(int viewportWidth) {
@@ -785,7 +756,7 @@ public final class ChatsPanel extends JPanel {
 		}
 	}
 
-	private ThinkingHandle showThinkingIndicator() {
+	private WorkingIndicator showWorkingIndicator() {
 		JLabel label = L10N.label("wingman.working");
 		label.setForeground(Theme.current().getInterfaceAccentColor());
 		ComponentUtils.deriveFont(label, 13);
@@ -798,13 +769,7 @@ public final class ChatsPanel extends JPanel {
 		row.setOpaque(false);
 		row.setBorder(BorderFactory.createEmptyBorder(2, 10, 4, 10));
 		row.add(label, BorderLayout.CENTER);
-
-		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
-		messagesPanel.add(row, index);
-		messagesPanel.revalidate();
-		messagesPanel.repaint();
-		updateContentView();
-		scrollToBottom();
+		appendRow(row);
 
 		Timer timer = new Timer(350, _ -> {
 			String text = label.getText();
@@ -815,7 +780,7 @@ public final class ChatsPanel extends JPanel {
 			}
 		});
 		timer.start();
-		return new ThinkingHandle(row, timer);
+		return new WorkingIndicator(row, timer);
 	}
 
 	private void scrollToBottom() {
@@ -823,15 +788,12 @@ public final class ChatsPanel extends JPanel {
 		bar.setValue(bar.getMaximum());
 	}
 
-	private record StreamedAssistantRow(ChatBubble bubble, JPanel row) {
-	}
-
-	private final class ThinkingHandle {
+	private final class WorkingIndicator {
 		private final JPanel row;
 		private final Timer timer;
 		private boolean stopped;
 
-		private ThinkingHandle(JPanel row, Timer timer) {
+		private WorkingIndicator(JPanel row, Timer timer) {
 			this.row = row;
 			this.timer = timer;
 		}

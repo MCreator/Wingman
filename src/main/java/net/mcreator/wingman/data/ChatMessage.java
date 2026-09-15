@@ -25,15 +25,11 @@ import net.mcreator.ui.laf.themes.Theme;
 import javax.annotation.Nullable;
 import java.awt.*;
 
-public record ChatMessage(Role role, String initialText, Integer thinkingDurationSeconds, String toolCallId,
-						  String toolName, String toolArguments, String toolResult) {
+public record ChatMessage(Role role, String initialText, @Nullable Integer thinkingDurationSeconds,
+						  String toolCallId, String toolName, String toolArguments, String toolResult) {
 
 	public ChatMessage(Role role, String initialText) {
 		this(role, initialText, null, null, null, null, null);
-	}
-
-	public ChatMessage(Role role, String initialText, Integer thinkingDurationSeconds) {
-		this(role, initialText, thinkingDurationSeconds, null, null, null, null);
 	}
 
 	public static ChatMessage user(String text) {
@@ -44,8 +40,8 @@ public record ChatMessage(Role role, String initialText, Integer thinkingDuratio
 		return new ChatMessage(Role.ASSISTANT, text);
 	}
 
-	public static ChatMessage assistant(String text, int thinkingDurationSeconds) {
-		return new ChatMessage(Role.ASSISTANT, text, thinkingDurationSeconds);
+	public static ChatMessage thought(String text, @Nullable Integer thinkingDurationSeconds) {
+		return new ChatMessage(Role.THOUGHT, text, thinkingDurationSeconds, null, null, null, null);
 	}
 
 	public static ChatMessage toolRequest(String toolCallId, String toolName, String toolArguments) {
@@ -80,6 +76,7 @@ public record ChatMessage(Role role, String initialText, Integer thinkingDuratio
 		//@formatter:off
 		USER(Theme.current().getInterfaceAccentColor(), Theme.current().getForegroundColor(), true, false, true),
 		ASSISTANT(Theme.current().getAltBackgroundColor(), Theme.current().getForegroundColor(), false, true, false),
+		THOUGHT(Theme.current().getAltBackgroundColor(), Theme.current().getForegroundColor(), false, true, false),
 		SYSTEM(Theme.current().getAltBackgroundColor(), Theme.current().getForegroundColor(), false, true, false),
 		TOOL_REQUEST(Theme.current().getAltBackgroundColor(), Theme.current().getForegroundColor(), false, true, false),
 		TOOL_RESULT(Theme.current().getAltBackgroundColor(), Theme.current().getForegroundColor(), false, true, false);

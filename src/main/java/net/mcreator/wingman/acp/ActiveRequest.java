@@ -62,8 +62,13 @@ final class ActiveRequest extends TurnAssembler {
 		super.handle(update);
 	}
 
-	@Override void onResponseText(String responseText) {
-		listener.onPartialResponse(responseText);
+	@Override void onPartialMessage(ChatMessage message) {
+		listener.onPartialMessage(message);
+	}
+
+	@Override void onMessageFinished(ChatMessage message) {
+		conversation.addMessage(message);
+		listener.onMessageFinished(message);
 	}
 
 	@Override void onToolRequest(String id, String name, @Nullable AcpSchema.ToolKind kind, String arguments) {
@@ -156,21 +161,15 @@ final class ActiveRequest extends TurnAssembler {
 				&& stopReason != AcpSchema.StopReason.CANCELLED) {
 			LOG.warn("ACP prompt stopped with reason {}", stopReason);
 		}
-		String finalText = finishResponse();
-		if (!finalText.isEmpty()) {
-			conversation.addMessage(ChatMessage.assistant(finalText));
-		}
-		listener.onCompleteResponse(finalText);
+		finishMessage();
+		listener.onCompleteResponse();
 	}
 
 	synchronized void fail(Throwable error) {
 		if (cancelled) {
 			return;
 		}
-		String partialText = finishResponse();
-		if (!partialText.isEmpty()) {
-			conversation.addMessage(ChatMessage.assistant(partialText));
-		}
+		finishMessage();
 		conversation.addMessage(ChatMessage.requestFailed(error.getMessage()));
 		listener.onError(error.getMessage());
 	}
@@ -180,11 +179,8 @@ final class ActiveRequest extends TurnAssembler {
 			return;
 		}
 		cancelled = true;
-		String partialText = finishResponse();
-		if (!partialText.isEmpty()) {
-			conversation.addMessage(ChatMessage.assistant(partialText));
-		}
-		listener.onCompleteResponse(partialText);
+		finishMessage();
+		listener.onCompleteResponse();
 	}
 
 }

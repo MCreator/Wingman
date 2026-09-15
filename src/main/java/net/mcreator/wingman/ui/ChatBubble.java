@@ -3,7 +3,6 @@ package net.mcreator.wingman.ui;
 import net.mcreator.ui.component.util.ComponentUtils;
 import net.mcreator.wingman.data.ChatMessage;
 import net.mcreator.wingman.util.MarkdownRenderer;
-import net.mcreator.wingman.util.ThinkingContentParser;
 
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
@@ -16,10 +15,7 @@ final class ChatBubble extends JPanel {
 
 	private final JTextArea plainBody;
 	private final JEditorPane htmlBody;
-	private final ThinkingPanel thinkingPanel;
 	private final JPanel contentHolder;
-
-	private Integer thinkingDurationSeconds;
 
 	private int maxWidth = 0;
 
@@ -70,15 +66,10 @@ final class ChatBubble extends JPanel {
 				BorderFactory.createEmptyBorder(10, 12, 10, 12) :
 				BorderFactory.createEmptyBorder(2, 0, 2, 0));
 		if (role == ChatMessage.Role.USER) {
-			thinkingPanel = null;
 			holder.add(plainBody, BorderLayout.CENTER);
 		} else {
-			thinkingPanel = new ThinkingPanel();
-			thinkingDurationSeconds = message.thinkingDurationSeconds();
-			holder.setLayout(new BorderLayout(0, 8));
-			holder.add(thinkingPanel, BorderLayout.NORTH);
 			holder.add(htmlBody, BorderLayout.CENTER);
-			applyAssistantContent(message.initialText(), true);
+			setHtmlContent(message.initialText());
 		}
 		add(holder, BorderLayout.CENTER);
 
@@ -86,39 +77,24 @@ final class ChatBubble extends JPanel {
 	}
 
 	void setText(String text) {
-		setText(text, false);
-	}
-
-	void setText(String text, boolean finalized) {
 		if (role == ChatMessage.Role.USER) {
 			plainBody.setText(text);
 		} else {
-			applyAssistantContent(text, finalized);
+			setHtmlContent(text);
 		}
 		revalidate();
 		repaint();
 	}
 
-	private void applyAssistantContent(String text, boolean finalized) {
-		ThinkingContentParser.ParsedContent parsed = ThinkingContentParser.parse(text, finalized);
-		thinkingPanel.update(parsed.thinking(), parsed.thinkingInProgress(), thinkingDurationSeconds);
-		if (thinkingPanel.getThinkingDurationSeconds() != null) {
-			thinkingDurationSeconds = thinkingPanel.getThinkingDurationSeconds();
-		}
-
-		String response = parsed.response();
-		boolean showResponse = !response.isBlank();
-		htmlBody.setVisible(showResponse);
-		if (showResponse) {
-			htmlBody.setText(MarkdownRenderer.toHtmlDocument(response, role.bubbleForeground(), plainBody.getFont()));
+	private void setHtmlContent(String text) {
+		boolean showText = !text.isBlank();
+		htmlBody.setVisible(showText);
+		if (showText) {
+			htmlBody.setText(MarkdownRenderer.toHtmlDocument(text, role.bubbleForeground(), plainBody.getFont()));
 			htmlBody.setCaretPosition(0);
 			htmlBody.setPreferredSize(null);
 			contentHolder.revalidate();
 		}
-	}
-
-	Integer getThinkingDurationSeconds() {
-		return thinkingDurationSeconds;
 	}
 
 	void setMaxWidth(int width) {

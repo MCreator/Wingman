@@ -37,7 +37,7 @@ public abstract class AssistantService {
 
 	/**
 	 * Cancels the request currently streaming for the given conversation, if any. The implementation must
-	 * still invoke {@link StreamListener#onCompleteResponse(String)} with the partial response.
+	 * still finish the message being streamed and invoke {@link StreamListener#onCompleteResponse()}.
 	 */
 	abstract public void cancel(ChatConversation conversation);
 

@@ -40,12 +40,16 @@ public final class ChatsPanel extends JPanel {
 
 	private static final String INPUT_PLACEHOLDER = L10N.t("wingman.input.placeholder");
 
+	private static final int COMPOSER_MIN_ROWS = 2;
+	private static final int COMPOSER_MAX_ROWS = 8;
+
 	private final ScrollablePanel messagesPanel = new ScrollablePanel();
 	private final JScrollPane messagesScroll;
 	private final CardLayout contentCardLayout = new CardLayout();
 	private final JPanel contentCards = new JPanel(contentCardLayout);
 
 	private final JTextArea inputArea;
+	private JScrollPane inputScroll;
 
 	private final JButton sendButton = new JButton(UIRES.get("wingman.send"));
 
@@ -68,7 +72,6 @@ public final class ChatsPanel extends JPanel {
 
 	private final MCreator mcreator;
 
-	// TODO: composer text area should increase visible rows if more text is entered, but only up to 8 rows, and minimum 2 rows
 	public ChatsPanel(MCreator mcreator, AssistantService assistantService) {
 		super(new BorderLayout(0, 5));
 		this.mcreator = mcreator;
@@ -109,7 +112,7 @@ public final class ChatsPanel extends JPanel {
 
 		contextUsageBar = new ContextUsageBar(Theme.current().getInterfaceAccentColor());
 
-		inputArea = new JTextArea(2, 28) {
+		inputArea = new JTextArea(COMPOSER_MIN_ROWS, 28) {
 			@Override protected void paintComponent(Graphics g) {
 				super.paintComponent(g);
 				if (getText().isEmpty()) {
@@ -367,15 +370,27 @@ public final class ChatsPanel extends JPanel {
 		ComponentUtils.deriveFont(inputArea, 13);
 		inputArea.getDocument().addDocumentListener(new DocumentListener() {
 			@Override public void insertUpdate(DocumentEvent e) {
-				inputArea.repaint();
+				onInputChanged();
 			}
 
 			@Override public void removeUpdate(DocumentEvent e) {
-				inputArea.repaint();
+				onInputChanged();
 			}
 
 			@Override public void changedUpdate(DocumentEvent e) {
+				onInputChanged();
+			}
+
+			private void onInputChanged() {
 				inputArea.repaint();
+				// The view updates after this listener, so defer the row calculation
+				SwingUtilities.invokeLater(ChatsPanel.this::updateComposerRows);
+			}
+		});
+		// Wrapping changes with width, so recompute rows on resize as well
+		inputArea.addComponentListener(new ComponentAdapter() {
+			@Override public void componentResized(ComponentEvent e) {
+				updateComposerRows();
 			}
 		});
 
@@ -389,7 +404,7 @@ public final class ChatsPanel extends JPanel {
 		sendButton.putClientProperty("JButton.buttonType", "borderless");
 		sendButton.setMargin(new Insets(2, 2, 2, 2));
 
-		JScrollPane inputScroll = new JScrollPane(inputArea);
+		inputScroll = new JScrollPane(inputArea);
 		inputScroll.setBorder(BorderFactory.createEmptyBorder());
 		inputScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		inputScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
@@ -410,6 +425,24 @@ public final class ChatsPanel extends JPanel {
 		panel.add(inputWrapper, BorderLayout.CENTER);
 
 		return panel;
+	}
+
+	private void updateComposerRows() {
+		int rowHeight = inputArea.getFontMetrics(inputArea.getFont()).getHeight();
+		if (rowHeight <= 0)
+			return;
+
+		Insets insets = inputArea.getInsets();
+		int contentHeight = inputArea.getUI().getPreferredSize(inputArea).height - insets.top - insets.bottom;
+		int lines = Math.max(1, (int) Math.ceil(contentHeight / (double) rowHeight));
+		int rows = Math.clamp(lines, COMPOSER_MIN_ROWS, COMPOSER_MAX_ROWS);
+
+		if (rows != inputArea.getRows()) {
+			inputArea.setRows(rows);
+			// JScrollPane is a validate root, so revalidate its parent for the composer to resize
+			inputScroll.getParent().revalidate();
+			inputScroll.getParent().repaint();
+		}
 	}
 
 	private void sendCurrentMessage() {

@@ -12,6 +12,8 @@ import net.mcreator.ui.init.UIRES;
 import net.mcreator.ui.laf.themes.Theme;
 import net.mcreator.util.StringUtils;
 import net.mcreator.wingman.data.*;
+import net.mcreator.wingman.data.StreamListener.PermissionDecision;
+import net.mcreator.wingman.data.StreamListener.PermissionRequest;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -26,6 +28,7 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutionException;
 
 public final class ChatsPanel extends JPanel {
 
@@ -61,6 +64,12 @@ public final class ChatsPanel extends JPanel {
 	private final Timer resizeDebounceTimer;
 	private final ContextUsageBar contextUsageBar;
 	private final Map<String, ToolCallPanel> activeToolPanels = new LinkedHashMap<>();
+
+	// When selected, tool calls are approved without asking the user
+	private final JCheckBox autoApproveCheckBox = L10N.checkbox("wingman.permission.auto");
+
+	// Approval bubbles waiting for the user, agents running tool calls in parallel may ask for several at once
+	private final List<PermissionRequestPanel> pendingPermissions = new ArrayList<>();
 
 	// The view of the thought or assistant message currently being streamed, null between messages
 	private JComponent streamedMessageView;
@@ -304,6 +313,7 @@ public final class ChatsPanel extends JPanel {
 	}
 
 	private void clearMessagesPanel() {
+		cancelPendingPermissions();
 		activeToolPanels.clear();
 		streamedMessageView = null;
 		messagesPanel.removeAll();
@@ -332,6 +342,8 @@ public final class ChatsPanel extends JPanel {
 		}
 		cancelRequested = true;
 		sendButton.setEnabled(false);
+		// Permission requests the agent is waiting on are answered as cancelled, as the ACP spec asks for
+		cancelPendingPermissions();
 		assistantService.cancel(activeConversation);
 	}
 
@@ -420,9 +432,24 @@ public final class ChatsPanel extends JPanel {
 
 		composer.add(inputScroll, BorderLayout.CENTER);
 
-		JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+		autoApproveCheckBox.setOpaque(false);
+		autoApproveCheckBox.setFocusPainted(false);
+		autoApproveCheckBox.setToolTipText(L10N.t("wingman.permission.auto.tooltip"));
+		autoApproveCheckBox.setForeground(Theme.current().getAltForegroundColor());
+		ComponentUtils.deriveFont(autoApproveCheckBox, 12);
+		autoApproveCheckBox.addActionListener(_ -> {
+			// Turning auto approval on also answers the requests currently waiting for the user
+			if (autoApproveCheckBox.isSelected()) {
+				for (PermissionRequestPanel pending : List.copyOf(pendingPermissions)) {
+					resolvePermission(pending, autoApproveDecision(pending.request()));
+				}
+			}
+		});
+
+		JPanel actions = new JPanel(new BorderLayout(0, 0));
 		actions.setOpaque(false);
-		actions.add(sendButton);
+		actions.add(autoApproveCheckBox, BorderLayout.WEST);
+		actions.add(sendButton, BorderLayout.EAST);
 		composer.add(actions, BorderLayout.SOUTH);
 
 		JPanel inputWrapper = new JPanel(new BorderLayout(0, 0));
@@ -504,6 +531,7 @@ public final class ChatsPanel extends JPanel {
 			@Override public void onCompleteResponse() {
 				SwingUtilities.invokeLater(() -> {
 					working.stop();
+					cancelPendingPermissions();
 					hideAllRunningTools();
 					streamedMessageView = null;
 					if (cancelRequested) {
@@ -520,6 +548,7 @@ public final class ChatsPanel extends JPanel {
 			@Override public void onError(String errorMessage) {
 				SwingUtilities.invokeLater(() -> {
 					working.stop();
+					cancelPendingPermissions();
 					hideAllRunningTools();
 					streamedMessageView = null;
 					appendSystemError(ChatMessage.requestFailed(errorMessage));
@@ -529,10 +558,21 @@ public final class ChatsPanel extends JPanel {
 			}
 
 			@Override public PermissionDecision onPermissionRequest(PermissionRequest request) {
-				// TODO: implement approval system, and read-only mode
-				LOG.debug("Permission request for tool {}: {}, kind {}, decisions: {}", request.toolName(),
-						request.title(), request.kind(), request.offeredDecisions());
-				return PermissionDecision.ALLOW_ONCE;
+				// Called on a worker thread of the ACP client, which waits for the user to decide
+				CompletableFuture<PermissionDecision> decision = new CompletableFuture<>();
+				SwingUtilities.invokeLater(() -> {
+					working.stop();
+					askPermission(request, decision);
+				});
+				try {
+					return decision.get();
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return PermissionDecision.CANCELLED;
+				} catch (ExecutionException e) {
+					LOG.warn("Permission decision failed", e);
+					return PermissionDecision.CANCELLED;
+				}
 			}
 		};
 
@@ -679,6 +719,47 @@ public final class ChatsPanel extends JPanel {
 		panel.markCompleted();
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
+	}
+
+	private void askPermission(PermissionRequest request, CompletableFuture<PermissionDecision> decision) {
+		if (!requestInProgress || cancelRequested) {
+			decision.complete(PermissionDecision.CANCELLED);
+			return;
+		}
+		if (autoApproveCheckBox.isSelected()) {
+			decision.complete(autoApproveDecision(request));
+			return;
+		}
+		PermissionRequestPanel panel = new PermissionRequestPanel(request, decision, this::resolvePermission);
+		pendingPermissions.add(panel);
+		appendRow(panel);
+	}
+
+	private void resolvePermission(PermissionRequestPanel panel, PermissionDecision decision) {
+		if (!pendingPermissions.remove(panel)) {
+			return;
+		}
+		messagesPanel.remove(panel);
+		messagesPanel.revalidate();
+		messagesPanel.repaint();
+		updateContentView();
+		panel.decision().complete(decision);
+	}
+
+	private void cancelPendingPermissions() {
+		for (PermissionRequestPanel panel : List.copyOf(pendingPermissions)) {
+			resolvePermission(panel, PermissionDecision.CANCELLED);
+		}
+	}
+
+	private static PermissionDecision autoApproveDecision(PermissionRequest request) {
+		if (request.offeredDecisions().contains(PermissionDecision.ALLOW_ONCE)) {
+			return PermissionDecision.ALLOW_ONCE;
+		}
+		if (request.offeredDecisions().contains(PermissionDecision.ALLOW_ALWAYS)) {
+			return PermissionDecision.ALLOW_ALWAYS;
+		}
+		return PermissionDecision.CANCELLED;
 	}
 
 	private void hideAllRunningTools() {

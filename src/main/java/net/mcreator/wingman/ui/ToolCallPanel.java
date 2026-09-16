@@ -1,7 +1,6 @@
 package net.mcreator.wingman.ui;
 
 import net.mcreator.ui.component.SquareLoaderIcon;
-import net.mcreator.ui.component.util.ComponentUtils;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.laf.themes.Theme;
 import net.mcreator.wingman.data.ChatMessage;
@@ -14,26 +13,25 @@ final class ToolCallPanel extends JPanel {
 
 	private String toolName;
 	private final JLabel loader;
-	private final JLabel label;
+	private final JTextArea label;
 
 	private ToolCallPanel(String toolName, boolean running) {
-		super(new BorderLayout());
+		super(new BorderLayout(6, 0));
 
 		setOpaque(false);
 		setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
 
-		JPanel content = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-		content.setOpaque(false);
-
 		loader = new JLabel(new SquareLoaderIcon(this, 4, 1, Theme.current().getAltForegroundColor()));
 		loader.setVisible(running);
-		label = new JLabel(labelText(running));
-		label.setForeground(Theme.current().getAltForegroundColor());
-		ComponentUtils.deriveFont(label, 13);
+		loader.setVerticalAlignment(SwingConstants.TOP);
 
-		content.add(loader);
-		content.add(label);
-		add(content, BorderLayout.CENTER);
+		label = ChatComponents.wrappingText(labelText(running), 13, Theme.current().getAltForegroundColor());
+
+		JPanel loaderHolder = new JPanel(new BorderLayout());
+		loaderHolder.setOpaque(false);
+		loaderHolder.add(loader, BorderLayout.NORTH);
+		add(loaderHolder, BorderLayout.WEST);
+		add(label, BorderLayout.CENTER);
 
 		setToolName(toolName);
 	}
@@ -47,7 +45,7 @@ final class ToolCallPanel extends JPanel {
 	}
 
 	void setToolName(String toolName) {
-		this.toolName = toolName.replaceAll("mcreator.*?: ", "");
+		this.toolName = ChatComponents.toolDisplayName(toolName);
 		label.setText(labelText(loader.isVisible()));
 		revalidate();
 		repaint();

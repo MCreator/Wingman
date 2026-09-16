@@ -67,7 +67,7 @@ final class PermissionRequestPanel extends JPanel {
 				int height = Math.max(0, getHeight() - 1);
 				g2.setColor(Theme.current().getAltBackgroundColor());
 				g2.fillRoundRect(0, 0, width, height, ARC, ARC);
-				g2.setColor(Theme.current().getForegroundColor());
+				g2.setColor(Theme.current().getSecondAltBackgroundColor());
 				g2.drawRoundRect(0, 0, width, height, ARC, ARC);
 				g2.dispose();
 				super.paintComponent(graphics);

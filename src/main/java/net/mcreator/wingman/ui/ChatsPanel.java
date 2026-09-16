@@ -4,6 +4,7 @@ import net.mcreator.ui.MCreator;
 import net.mcreator.ui.component.JScrollablePopupMenu;
 import net.mcreator.ui.component.ScrollWheelPassLayer;
 import net.mcreator.ui.component.ScrollablePanel;
+import net.mcreator.ui.component.SquareLoaderIcon;
 import net.mcreator.ui.component.util.ComponentUtils;
 import net.mcreator.ui.component.util.PanelUtils;
 import net.mcreator.ui.dialogs.preferences.PreferencesDialog;
@@ -64,6 +65,9 @@ public final class ChatsPanel extends JPanel {
 	private final Timer resizeDebounceTimer;
 	private final ContextUsageBar contextUsageBar;
 	private final Map<String, ToolCallPanel> activeToolPanels = new LinkedHashMap<>();
+
+	// Loader kept at the bottom of the messages while the agent works on a request, hidden while it waits for the user
+	private final JPanel workingRow = buildWorkingRow();
 
 	// When selected, tool calls are approved without asking the user
 	private final JCheckBox autoApproveCheckBox = L10N.checkbox("wingman.permission.auto");
@@ -496,14 +500,11 @@ public final class ChatsPanel extends JPanel {
 		cancelRequested = false;
 		setRequestInProgress(true);
 		refreshContextUsage();
-		WorkingIndicator working = showWorkingIndicator();
+		setWorking(true);
 
 		StreamListener listener = new StreamListener() {
 			@Override public void onPartialMessage(ChatMessage message) {
-				SwingUtilities.invokeLater(() -> {
-					working.stop();
-					showStreamedMessage(message, false);
-				});
+				SwingUtilities.invokeLater(() -> showStreamedMessage(message, false));
 			}
 
 			@Override public void onMessageFinished(ChatMessage message) {
@@ -511,10 +512,7 @@ public final class ChatsPanel extends JPanel {
 			}
 
 			@Override public void onToolRequest(StreamListener.ToolRequestEvent request) {
-				SwingUtilities.invokeLater(() -> {
-					working.stop();
-					showRunningTool(request);
-				});
+				SwingUtilities.invokeLater(() -> showRunningTool(request));
 			}
 
 			@Override public void onToolRenamed(StreamListener.ToolRenameEvent rename) {
@@ -530,9 +528,9 @@ public final class ChatsPanel extends JPanel {
 
 			@Override public void onCompleteResponse() {
 				SwingUtilities.invokeLater(() -> {
-					working.stop();
 					cancelPendingPermissions();
 					hideAllRunningTools();
+					setWorking(false);
 					streamedMessageView = null;
 					if (cancelRequested) {
 						ChatMessage cancelledMessage = ChatMessage.system(L10N.t("wingman.request.cancelled"));
@@ -547,9 +545,9 @@ public final class ChatsPanel extends JPanel {
 
 			@Override public void onError(String errorMessage) {
 				SwingUtilities.invokeLater(() -> {
-					working.stop();
 					cancelPendingPermissions();
 					hideAllRunningTools();
+					setWorking(false);
 					streamedMessageView = null;
 					appendSystemError(ChatMessage.requestFailed(errorMessage));
 					setRequestInProgress(false);
@@ -560,10 +558,7 @@ public final class ChatsPanel extends JPanel {
 			@Override public PermissionDecision onPermissionRequest(PermissionRequest request) {
 				// Called on a worker thread of the ACP client, which waits for the user to decide
 				CompletableFuture<PermissionDecision> decision = new CompletableFuture<>();
-				SwingUtilities.invokeLater(() -> {
-					working.stop();
-					askPermission(request, decision);
-				});
+				SwingUtilities.invokeLater(() -> askPermission(request, decision));
 				try {
 					return decision.get();
 				} catch (InterruptedException e) {
@@ -651,7 +646,9 @@ public final class ChatsPanel extends JPanel {
 	 * Adds a full-width row before the trailing glue of the messages panel
 	 */
 	private <T extends JComponent> T appendRow(T row) {
-		int index = Math.max(0, messagesPanel.getComponentCount() - 1);
+		int index = row != workingRow && workingRow.getParent() == messagesPanel ?
+				messagesPanel.getComponentZOrder(workingRow) :
+				Math.max(0, messagesPanel.getComponentCount() - 1);
 		messagesPanel.add(row, index);
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
@@ -693,7 +690,7 @@ public final class ChatsPanel extends JPanel {
 		}
 
 		appendRow(row);
-		messagesPanel.add(Box.createVerticalStrut(4), messagesPanel.getComponentCount() - 1);
+		messagesPanel.add(Box.createVerticalStrut(4), messagesPanel.getComponentZOrder(row) + 1);
 		return bubble;
 	}
 
@@ -732,6 +729,7 @@ public final class ChatsPanel extends JPanel {
 		}
 		PermissionRequestPanel panel = new PermissionRequestPanel(request, decision, this::resolvePermission);
 		pendingPermissions.add(panel);
+		setWorking(false);
 		appendRow(panel);
 	}
 
@@ -743,6 +741,9 @@ public final class ChatsPanel extends JPanel {
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
 		updateContentView();
+		if (pendingPermissions.isEmpty() && requestInProgress) {
+			setWorking(true);
+		}
 		panel.decision().complete(decision);
 	}
 
@@ -837,10 +838,12 @@ public final class ChatsPanel extends JPanel {
 		}
 	}
 
-	private WorkingIndicator showWorkingIndicator() {
+	private static JPanel buildWorkingRow() {
 		JLabel label = L10N.label("wingman.working");
 		label.setForeground(Theme.current().getInterfaceAccentColor());
 		ComponentUtils.deriveFont(label, 13);
+		label.setIcon(new SquareLoaderIcon(label, 4, 1, Theme.current().getInterfaceAccentColor()));
+		label.setIconTextGap(6);
 
 		JPanel row = new JPanel(new BorderLayout()) {
 			@Override public Dimension getMaximumSize() {
@@ -848,48 +851,28 @@ public final class ChatsPanel extends JPanel {
 			}
 		};
 		row.setOpaque(false);
-		row.setBorder(BorderFactory.createEmptyBorder(2, 10, 4, 10));
-		row.add(label, BorderLayout.CENTER);
-		appendRow(row);
+		row.setBorder(BorderFactory.createEmptyBorder(4, 10, 4, 10));
+		row.add(label, BorderLayout.WEST);
+		return row;
+	}
 
-		Timer timer = new Timer(350, _ -> {
-			String text = label.getText();
-			if (text.endsWith("...")) {
-				label.setText(L10N.t("wingman.working"));
-			} else {
-				label.setText(text + ".");
-			}
-		});
-		timer.start();
-		return new WorkingIndicator(row, timer);
+	private void setWorking(boolean working) {
+		if (working == (workingRow.getParent() == messagesPanel)) {
+			return;
+		}
+		if (working) {
+			appendRow(workingRow);
+		} else {
+			messagesPanel.remove(workingRow);
+			messagesPanel.revalidate();
+			messagesPanel.repaint();
+			updateContentView();
+		}
 	}
 
 	private void scrollToBottom() {
 		JScrollBar bar = messagesScroll.getVerticalScrollBar();
 		bar.setValue(bar.getMaximum());
-	}
-
-	private final class WorkingIndicator {
-		private final JPanel row;
-		private final Timer timer;
-		private boolean stopped;
-
-		private WorkingIndicator(JPanel row, Timer timer) {
-			this.row = row;
-			this.timer = timer;
-		}
-
-		private void stop() {
-			if (stopped) {
-				return;
-			}
-			stopped = true;
-			timer.stop();
-			messagesPanel.remove(row);
-			messagesPanel.revalidate();
-			messagesPanel.repaint();
-			updateContentView();
-		}
 	}
 
 }

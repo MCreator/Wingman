@@ -123,6 +123,22 @@ public final class AcpChatService extends AssistantService {
 		}
 	}
 
+	/**
+	 * Drops the connection to the agent without waiting for it, for use when the connection failed. Sessions of the
+	 * dropped connection are reloaded or restarted with the history relayed by the next request.
+	 */
+	private synchronized void dropConnection() {
+		if (client != null) {
+			try {
+				client.close();
+			} catch (RuntimeException e) {
+				LOG.debug("Failed to close broken ACP client", e);
+			}
+			client = null;
+			knownSessions.clear();
+		}
+	}
+
 	private String workspaceDirectory() {
 		return mcreator.getWorkspace().getWorkspaceFolder().getAbsolutePath();
 	}
@@ -151,6 +167,12 @@ public final class AcpChatService extends AssistantService {
 		} catch (Throwable e) {
 			// Errors (e.g. ServiceConfigurationError, NoClassDefFoundError) are reported too, so the UI never waits forever
 			LOG.warn("ACP prompt failed", e);
+			if (!(e instanceof AcpClientSession.AcpError)) {
+				// Only a JSON-RPC error proves the agent is still alive. Anything else (e.g. the agent process died, the
+				// transport closed, a timeout) may have left the connection unusable, so it is dropped and the next
+				// request connects again instead of failing with the same dead connection forever
+				dropConnection();
+			}
 			active.fail(e);
 		} finally {
 			if (sessionId != null) {

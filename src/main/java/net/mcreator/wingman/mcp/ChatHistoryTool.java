@@ -44,8 +44,8 @@ public class ChatHistoryTool extends McpTool<ChatHistoryTool.Args> {
 	public static class Args {
 		@SchemaDescription("ID of the conversation to read. Omit to list the available conversations instead.")
 		@Nullable public String conversationId;
-		@SchemaDescription("Optional Java regex filter on conversation titles when listing conversations.")
-		@Nullable public String filter;
+		@SchemaDescription("Optional Java regex filter on conversation titles when listing conversations.") @Nullable
+		public String filter;
 		@SchemaDescription("When reading a conversation, only the last N characters of the transcript are returned.")
 		public int lastNCharsToRead = 30000;
 	}

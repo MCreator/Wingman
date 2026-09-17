@@ -19,7 +19,7 @@
 
 package net.mcreator.wingman.ui;
 
-import javax.swing.SizeRequirements;
+import javax.swing.*;
 import javax.swing.text.*;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.InlineView;

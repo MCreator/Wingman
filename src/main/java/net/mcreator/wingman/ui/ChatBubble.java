@@ -1,10 +1,12 @@
 package net.mcreator.wingman.ui;
 
 import net.mcreator.ui.component.util.ComponentUtils;
+import net.mcreator.util.DesktopUtils;
 import net.mcreator.wingman.data.ChatMessage;
 import net.mcreator.wingman.util.MarkdownRenderer;
 
 import javax.swing.*;
+import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
@@ -56,6 +58,12 @@ final class ChatBubble extends JPanel {
 		htmlBody.setForeground(fg);
 		htmlBody.setFont(plainBody.getFont());
 		ComponentUtils.deriveFont(htmlBody, 13);
+		htmlBody.addHyperlinkListener(e -> {
+			if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+				// The URL is null for links Swing could not parse, the raw href is opened then
+				DesktopUtils.browseSafe(e.getURL() != null ? e.getURL().toString() : e.getDescription());
+			}
+		});
 
 		JPanel holder = role.constrainedBubbleWidth() ?
 				new RoundedPanel(fillColor, borderColor, 12) :

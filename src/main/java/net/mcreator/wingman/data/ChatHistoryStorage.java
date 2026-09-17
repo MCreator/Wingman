@@ -24,6 +24,8 @@ import com.google.gson.GsonBuilder;
 import net.mcreator.io.FileIO;
 import net.mcreator.ui.MCreator;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -32,6 +34,8 @@ import java.util.List;
 import java.util.UUID;
 
 public final class ChatHistoryStorage {
+
+	private static final Logger LOG = LogManager.getLogger(ChatHistoryStorage.class);
 
 	private static final String CONVERSATION_EXTENSION = ".wgm";
 	private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
@@ -96,12 +100,18 @@ public final class ChatHistoryStorage {
 		return files != null ? files : new File[0];
 	}
 
+	// Returns null if the file can not be read, e.g. it is corrupt, so one bad file does not fail the whole history
 	private ChatConversation readConversationFile(File file) {
-		ChatConversation conversation = gson.fromJson(FileIO.readFileToString(file), ChatConversation.class);
-		if (conversation != null) {
-			conversation.initializeAfterDeserialization(FilenameUtils.getBaseName(file.getName()), this);
+		try {
+			ChatConversation conversation = gson.fromJson(FileIO.readFileToString(file), ChatConversation.class);
+			if (conversation != null) {
+				conversation.initializeAfterDeserialization(FilenameUtils.getBaseName(file.getName()), this);
+			}
+			return conversation;
+		} catch (RuntimeException e) {
+			LOG.warn("Failed to read conversation file {}", file, e);
+			return null;
 		}
-		return conversation;
 	}
 
 }

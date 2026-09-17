@@ -146,6 +146,7 @@ public final class ChatsPanel extends JPanel {
 		messagesScroll.getViewport().setBackground(UIManager.getColor("Panel.background"));
 		messagesScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		messagesScroll.getVerticalScrollBar().setUnitIncrement(26);
+		messagesScroll.getVerticalScrollBar().setBackground(Theme.current().getSecondAltBackgroundColor());
 		messagesScroll.setOpaque(false);
 		messagesScroll.getViewport().setOpaque(false);
 
@@ -450,6 +451,7 @@ public final class ChatsPanel extends JPanel {
 		inputScroll.setBorder(BorderFactory.createEmptyBorder());
 		inputScroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 		inputScroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		inputScroll.getVerticalScrollBar().setBackground(composerBackground);
 		inputScroll.getViewport().setOpaque(false);
 		inputScroll.setOpaque(false);
 

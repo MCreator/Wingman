@@ -37,9 +37,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 
 final class AcpAuthenticator {
 
@@ -48,11 +48,17 @@ final class AcpAuthenticator {
 	// Error code of auth_required in the ACP specification
 	private static final int AUTH_REQUIRED = -32000;
 
+	// Wording of agents that report a required login with a generic error code instead of auth_required. Deliberately
+	// narrow, so errors merely mentioning e.g. an author or OAuth do not start the login flow
+	private static final Pattern AUTH_REQUIRED_MESSAGE = Pattern.compile(
+			"auth(entication)?[ _-]required|not (logged in|authenticated)|unauth(enticated|orized)|log ?in required",
+			Pattern.CASE_INSENSITIVE);
+
 	static boolean isAuthRequired(Throwable error) {
 		if (error instanceof AcpClientSession.AcpError acpError) {
 			String message = acpError.getError().message();
 			return acpError.getCode() == AUTH_REQUIRED || acpError.getCode() == AcpErrorCodes.AUTHENTICATION_REQUIRED
-					|| (message != null && message.toLowerCase(Locale.ROOT).contains("auth"));
+					|| (message != null && AUTH_REQUIRED_MESSAGE.matcher(message).find());
 		}
 		return false;
 	}

@@ -19,6 +19,7 @@
 
 package net.mcreator.wingman.util;
 
+import net.mcreator.ui.laf.themes.Theme;
 import org.commonmark.Extension;
 import org.commonmark.ext.autolink.AutolinkExtension;
 import org.commonmark.ext.gfm.tables.TablesExtension;
@@ -52,6 +53,13 @@ public final class MarkdownRenderer {
 		String colorHex = toHex(textColor);
 		String fontFamily = font != null ? font.getFamily() : "SansSerif";
 		int fontSize = font != null ? font.getSize() : 13;
+
+		// Blocks, borders, and links follow the current theme, so the rendered text fits light and dark themes alike
+		Theme theme = Theme.current();
+		String codeBackgroundHex = toHex(theme.getSecondAltBackgroundColor());
+		String borderHex = toHex(theme.getAltForegroundColor());
+		String linkHex = toHex(theme.getInterfaceAccentColor());
+		String codeFontFamily = theme.getConsoleFont().getFamily();
 		return """
 				<html>
 				  <head>
@@ -86,12 +94,11 @@ public final class MarkdownRenderer {
 				      pre {
 				        margin: 0;
 				        padding: 8px;
-				        background: rgba(0, 0, 0, 0.15);
-				        border-radius: 6px;
+				        background-color: %s;
 				        font-size: 0.95em;
 				      }
 				      code {
-				        font-family: Consolas, 'JetBrains Mono', monospace;
+				        font-family: '%s', monospace;
 				        font-size: 1em;
 				      }
 				      table {
@@ -99,18 +106,19 @@ public final class MarkdownRenderer {
 				        margin: 0;
 				      }
 				      th, td {
-				        border: 1px solid rgba(255, 255, 255, 0.25);
+				        border: 1px solid %s;
 				        padding: 4px 8px;
 				      }
 				      a {
-				        color: #8ab4f8;
+				        color: %s;
 				        text-decoration: underline;
 				      }
 				    </style>
 				  </head>
 				  <body>%s</body>
 				</html>
-				""".formatted(fontSize, colorHex, fontFamily, body);
+				""".formatted(fontSize, colorHex, fontFamily, codeBackgroundHex, codeFontFamily, borderHex, linkHex,
+				body);
 	}
 
 	private static String normalizeMarkdownInput(String markdown) {

@@ -220,7 +220,7 @@ public final class AcpChatService extends AssistantService {
 				client.loadSession(
 						new AcpSchema.LoadSessionRequest(sessionId, workspaceDirectory(), mcpServers(client)));
 				knownSessions.add(sessionId);
-				mcreator.getApplication().getAnalytics().trackEvent("wingman", "wingman_chat_resume");
+				mcreator.getApplication().getAnalytics().trackEvent("wingman_chat_resume", provider.id());
 				return new Session(sessionId, false);
 			} catch (RuntimeException e) {
 				// The session may belong to another agent or be gone, a new one is started with the history relayed
@@ -232,7 +232,7 @@ public final class AcpChatService extends AssistantService {
 				.sessionId();
 		knownSessions.add(sessionId);
 		conversation.setSessionId(sessionId);
-		mcreator.getApplication().getAnalytics().trackEvent("wingman", "wingman_chat_new");
+		mcreator.getApplication().getAnalytics().trackEvent("wingman_chat_new", provider.id());
 		return new Session(sessionId, true);
 	}
 

@@ -83,25 +83,30 @@ public final class AcpChatService extends AssistantService {
 		this.mcpServer = mcpServer;
 	}
 
-	private synchronized AcpSyncClient client() {
-		if (client == null) {
+	private AcpSyncClient client() {
+		AcpSyncClient connecting;
+		synchronized (this) {
+			if (client != null)
+				return client;
 			provider = providerSupplier.get();
-			AcpSyncClient newClient = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
+			connecting = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
 					.clientCapabilities(
 							// Only allow manipulations of the workspace via official MCP, no direct FS or terminal
 							new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
 					.sessionUpdateConsumer(this::handleSessionUpdate)
 					.requestPermissionHandler(this::handlePermissionRequest).build();
-			try {
-				AcpSchema.InitializeResponse response = newClient.initialize();
-				authMethods = response.authMethods() != null ? response.authMethods() : List.of();
-			} catch (RuntimeException e) {
-				newClient.close();
-				throw e;
-			}
-			client = newClient;
+			// Published before the agent is initialized and without holding the lock while it is, so a cancelled
+			// request can drop the connection, which fails the pending initialization instead of waiting for it
+			client = connecting;
 		}
-		return client;
+		try {
+			AcpSchema.InitializeResponse response = connecting.initialize();
+			authMethods = response.authMethods() != null ? response.authMethods() : List.of();
+			return connecting;
+		} catch (RuntimeException e) {
+			dropConnection();
+			throw e;
+		}
 	}
 
 	@Nullable private synchronized AcpSyncClient currentClient() {
@@ -124,18 +129,23 @@ public final class AcpChatService extends AssistantService {
 	}
 
 	/**
-	 * Drops the connection to the agent without waiting for it, for use when the connection failed. Sessions of the
-	 * dropped connection are reloaded or restarted with the history relayed by the next request.
+	 * Drops the connection to the agent, for use when the connection failed or a call pending on it has to be aborted:
+	 * closing the client fails all of its pending calls. Sessions of the dropped connection are reloaded or restarted
+	 * with the history relayed by the next request.
 	 */
-	private synchronized void dropConnection() {
-		if (client != null) {
-			try {
-				client.close();
-			} catch (RuntimeException e) {
-				LOG.debug("Failed to close broken ACP client", e);
-			}
+	private void dropConnection() {
+		AcpSyncClient dropped;
+		synchronized (this) {
+			dropped = client;
 			client = null;
 			knownSessions.clear();
+		}
+		if (dropped != null) {
+			try {
+				dropped.close(); // outside the lock, closing waits for the agent process to exit
+			} catch (RuntimeException e) {
+				LOG.debug("Failed to close dropped ACP client", e);
+			}
 		}
 	}
 
@@ -262,6 +272,10 @@ public final class AcpChatService extends AssistantService {
 				return;
 			}
 		}
+		// The request has no session yet, so it is still connecting to the agent or opening its session, which can
+		// hang until the request timeout. Dropping the connection fails the pending call, so the request fails and the
+		// UI is released. Closing waits for the agent process to exit, so it is done off the calling (Swing) thread
+		new Thread(this::dropConnection, "Wingman ACP drop").start();
 	}
 
 	@Override public float getContextUsage(ChatConversation conversation) {

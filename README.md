@@ -22,3 +22,11 @@ There is also IntelliJ IDEA run configuration for this task provided in the repo
 # Exporting
 
 To export the plugin, run `jar` task and find the plugin zip file in `build/libs`.
+
+# License
+
+MCreator Wingman is licensed under the GPL-3.0 license if not otherwise stated in source files or other files of
+this project. Copyright 2026 Pylo and contributors.
+
+The plugin bundles several third-party libraries. License files and notices for these libraries are located in the
+`license` subdirectory and are shipped with the plugin.

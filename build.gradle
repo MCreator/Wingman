@@ -51,6 +51,9 @@ tasks.jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', '**/module-info.class'
 
+    // Licenses and notices of the bundled libraries, shipped with the plugin as it redistributes them
+    from('license') { into 'license' }
+
     from {
         // Bundle only exported libraries that MCreator does not already provide on its runtime classpath.
         // Libraries are matched by module (ignoring version) so a different version of a library MCreator

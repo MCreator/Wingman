@@ -19,6 +19,7 @@
 
 package net.mcreator.wingman.ui;
 
+import net.mcreator.ui.MCreator;
 import net.mcreator.ui.component.SquareLoaderIcon;
 import net.mcreator.ui.init.L10N;
 import net.mcreator.ui.laf.themes.Theme;
@@ -31,17 +32,23 @@ import java.awt.*;
 
 final class ToolCallPanel extends JPanel {
 
+	private final MCreator mcreator;
+
 	private final String toolCallId;
 	private String toolName;
-	@Nullable private final String toolArguments;
+	private String rawToolName;
+	@Nullable private String toolArguments;
 	@Nullable private String toolResult;
 
 	private final JLabel loader;
+	private final JPanel references;
 	private final JTextArea label;
 
-	private ToolCallPanel(String toolCallId, String toolName, @Nullable String toolArguments, boolean running) {
+	private ToolCallPanel(MCreator mcreator, String toolCallId, String toolName, @Nullable String toolArguments,
+			boolean running) {
 		super(new BorderLayout(6, 0));
 
+		this.mcreator = mcreator;
 		this.toolCallId = toolCallId;
 		this.toolArguments = toolArguments;
 
@@ -54,25 +61,34 @@ final class ToolCallPanel extends JPanel {
 
 		label = ChatComponents.wrappingText(labelText(running), 13, Theme.current().getAltForegroundColor());
 
-		JPanel loaderHolder = new JPanel(new BorderLayout());
-		loaderHolder.setOpaque(false);
-		loaderHolder.add(loader, BorderLayout.NORTH);
-		add(loaderHolder, BorderLayout.WEST);
+		references = new JPanel();
+		references.setLayout(new BoxLayout(references, BoxLayout.X_AXIS));
+		references.setOpaque(false);
+
+		// Loader and reference icons stay on the first line of the label when it wraps
+		JPanel leading = new JPanel(new BorderLayout(6, 0));
+		leading.setOpaque(false);
+		leading.add(loader, BorderLayout.WEST);
+		leading.add(references, BorderLayout.CENTER);
+		JPanel leadingHolder = new JPanel(new BorderLayout());
+		leadingHolder.setOpaque(false);
+		leadingHolder.add(leading, BorderLayout.NORTH);
+		add(leadingHolder, BorderLayout.WEST);
 		add(label, BorderLayout.CENTER);
 
 		setToolName(toolName);
 	}
 
-	static ToolCallPanel running(StreamListener.ToolRequestEvent requestEvent) {
-		return new ToolCallPanel(requestEvent.id(), requestEvent.name(), requestEvent.arguments(), true);
+	static ToolCallPanel running(MCreator mcreator, StreamListener.ToolRequestEvent requestEvent) {
+		return new ToolCallPanel(mcreator, requestEvent.id(), requestEvent.name(), requestEvent.arguments(), true);
 	}
 
 	/**
 	 * @param request The stored tool request; the result is attached with {@link #setToolResult(String)} when its
 	 *                message is read from the history
 	 */
-	static ToolCallPanel fromHistory(ChatMessage request) {
-		return new ToolCallPanel(request.toolCallId(), request.toolName(), request.toolArguments(), false);
+	static ToolCallPanel fromHistory(MCreator mcreator, ChatMessage request) {
+		return new ToolCallPanel(mcreator, request.toolCallId(), request.toolName(), request.toolArguments(), false);
 	}
 
 	void setToolResult(@Nullable String toolResult) {
@@ -80,18 +96,35 @@ final class ToolCallPanel extends JPanel {
 	}
 
 	void setToolName(String toolName) {
+		this.rawToolName = toolName;
 		this.toolName = ChatComponents.toolDisplayName(toolName);
 		label.setText(labelText(loader.isVisible()));
+		refreshReferences();
 		revalidate();
 		repaint();
 	}
 
-	void markCompleted(@Nullable String toolResult) {
+	void markCompleted(@Nullable String toolArguments, @Nullable String toolResult) {
+		if (toolArguments != null && !toolArguments.isBlank()) {
+			this.toolArguments = toolArguments;
+		}
 		setToolResult(toolResult);
 		loader.setVisible(false);
 		label.setText(labelText(false));
+		// The arguments may have been completed, and the call may have created the resources it names
+		refreshReferences();
 		revalidate();
 		repaint();
+	}
+
+	private void refreshReferences() {
+		references.removeAll();
+		for (JLabel icon : ToolCallReferences.icons(mcreator.getWorkspace(), rawToolName, toolArguments)) {
+			if (references.getComponentCount() > 0)
+				references.add(Box.createHorizontalStrut(3));
+			references.add(icon);
+		}
+		references.setVisible(references.getComponentCount() > 0);
 	}
 
 	private String labelText(boolean running) {

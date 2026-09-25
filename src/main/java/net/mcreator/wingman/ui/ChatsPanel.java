@@ -617,7 +617,7 @@ public final class ChatsPanel extends JPanel {
 		case THOUGHT -> appendRow(new ThinkingPanel(message, false));
 		// Tool calls are shown where they were requested; the history only contains calls that got a result
 		case TOOL_REQUEST -> {
-			ToolCallPanel panel = appendRow(ToolCallPanel.fromHistory(message));
+			ToolCallPanel panel = appendRow(ToolCallPanel.fromHistory(mcreator, message));
 			if (message.toolCallId() != null) {
 				toolPanels.put(message.toolCallId(), panel);
 			}
@@ -731,7 +731,7 @@ public final class ChatsPanel extends JPanel {
 		if (activeToolPanels.containsKey(request.id())) {
 			return;
 		}
-		activeToolPanels.put(request.id(), appendRow(ToolCallPanel.running(request)));
+		activeToolPanels.put(request.id(), appendRow(ToolCallPanel.running(mcreator, request)));
 	}
 
 	private void renameToolCall(StreamListener.ToolRenameEvent rename) {

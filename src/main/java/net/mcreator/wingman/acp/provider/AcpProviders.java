@@ -43,10 +43,20 @@ public final class AcpProviders {
 		return ALL.stream().filter(provider -> provider.id().equals(id)).findFirst();
 	}
 
+	/**
+	 * @return The provider chosen in the preferences. If none is chosen yet, the first provider found installed
+	 * is chosen and stored, falling back to the custom provider when no known agent is installed.
+	 */
 	public static AcpProvider selected() {
-		return byId(WingmanPreferences.get().provider.get()).orElseGet(() -> ALL.stream()
+		Optional<AcpProvider> chosen = byId(WingmanPreferences.get().provider.get());
+		if (chosen.isPresent())
+			return chosen.get();
+
+		AcpProvider detected = ALL.stream().filter(provider -> provider != CUSTOM)
 				.filter(provider -> provider instanceof StdioAcpProvider stdio && stdio.installedExecutable()
-						.isPresent()).findFirst().orElse(ALL.getFirst()));
+						.isPresent()).findFirst().orElse(CUSTOM);
+		WingmanPreferences.get().provider.set(detected.id());
+		return detected;
 	}
 
 }

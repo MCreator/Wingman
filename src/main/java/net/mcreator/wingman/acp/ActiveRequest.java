@@ -101,8 +101,9 @@ final class ActiveRequest extends TurnAssembler {
 			name = match.toolName();
 			result = match.result();
 		}
+		conversation.setToolArguments(id, arguments);
 		conversation.addMessage(ChatMessage.toolResult(id, name, result));
-		listener.onToolResult(new StreamListener.ToolResultEvent(id, name, toKind(kind), result));
+		listener.onToolResult(new StreamListener.ToolResultEvent(id, name, toKind(kind), arguments, result));
 	}
 
 	AcpSchema.RequestPermissionOutcome requestPermission(@Nullable AcpSchema.ToolCallUpdate toolCall,

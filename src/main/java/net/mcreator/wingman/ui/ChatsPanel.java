@@ -746,7 +746,7 @@ public final class ChatsPanel extends JPanel {
 		if (panel == null) {
 			return;
 		}
-		panel.markCompleted(result.result());
+		panel.markCompleted(result.arguments(), result.result());
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
 	}

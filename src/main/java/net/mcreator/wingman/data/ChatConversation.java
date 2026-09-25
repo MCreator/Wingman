@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 public final class ChatConversation {
 
@@ -72,12 +73,22 @@ public final class ChatConversation {
 	}
 
 	public void renameToolCall(String toolCallId, String toolName) {
+		updateToolCall(toolCallId, message -> toolName.equals(message.toolName()) ? null : message.withToolName(toolName));
+	}
+
+	public void setToolArguments(String toolCallId, String toolArguments) {
+		updateToolCall(toolCallId, message -> message.role() == ChatMessage.Role.TOOL_REQUEST && !toolArguments.equals(
+				message.toolArguments()) ? message.withToolArguments(toolArguments) : null);
+	}
+
+	private void updateToolCall(String toolCallId, Function<ChatMessage, ChatMessage> update) {
 		boolean updated = false;
 		synchronized (lock) {
 			for (int i = 0; i < messages.size(); i++) {
 				ChatMessage message = messages.get(i);
-				if (toolCallId.equals(message.toolCallId()) && !toolName.equals(message.toolName())) {
-					messages.set(i, message.withToolName(toolName));
+				ChatMessage replacement = toolCallId.equals(message.toolCallId()) ? update.apply(message) : null;
+				if (replacement != null) {
+					messages.set(i, replacement);
 					updated = true;
 				}
 			}

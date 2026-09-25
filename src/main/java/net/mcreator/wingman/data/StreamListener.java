@@ -45,7 +45,7 @@ public interface StreamListener {
 	record ToolRenameEvent(String id, String name) {
 	}
 
-	record ToolResultEvent(String id, String name, ToolKind kind, String result) {
+	record ToolResultEvent(String id, String name, ToolKind kind, String arguments, String result) {
 	}
 
 	record PermissionRequest(String toolCallId, String toolName, String title, String arguments, ToolKind kind,

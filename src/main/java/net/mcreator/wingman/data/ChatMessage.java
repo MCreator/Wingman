@@ -61,6 +61,11 @@ public record ChatMessage(Role role, String initialText, @Nullable Integer think
 				toolResult);
 	}
 
+	public ChatMessage withToolArguments(String toolArguments) {
+		return new ChatMessage(role, initialText, thinkingDurationSeconds, toolCallId, toolName, toolArguments,
+				toolResult);
+	}
+
 	public static ChatMessage system(String text) {
 		return new ChatMessage(Role.SYSTEM, text);
 	}

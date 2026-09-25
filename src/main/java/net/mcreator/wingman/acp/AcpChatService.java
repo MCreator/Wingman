@@ -30,6 +30,7 @@ import net.mcreator.wingman.data.AssistantService;
 import net.mcreator.wingman.data.ChatConversation;
 import net.mcreator.wingman.data.ChatMessage;
 import net.mcreator.wingman.data.StreamListener;
+import net.mcreator.wingman.mcp.McpToolCallMatcher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -61,6 +62,7 @@ public final class AcpChatService extends AssistantService {
 
 	// MCreator MCP server given to each session, null if there is none
 	@Nullable private final AcpSchema.McpServer mcpServer;
+	@Nullable private final McpToolCallMatcher toolCallMatcher;
 
 	private AcpProvider provider;
 	private AcpSyncClient client;
@@ -74,13 +76,16 @@ public final class AcpChatService extends AssistantService {
 	/**
 	 * @param providerSupplier Provider of the agent to connect to, queried whenever a connection is made
 	 * @param mcpServer        MCreator MCP server the agent connects to in each session, null if there is none
+	 * @param toolCallMatcher  Matcher of the results of that server's tools to the tool calls reported by the agent,
+	 *                         null if there is no server
 	 */
 	public AcpChatService(MCreator mcreator, Supplier<AcpProvider> providerSupplier,
-			@Nullable AcpSchema.McpServer mcpServer) {
+			@Nullable AcpSchema.McpServer mcpServer, @Nullable McpToolCallMatcher toolCallMatcher) {
 		super(mcreator);
 		this.mcreator = mcreator;
 		this.providerSupplier = providerSupplier;
 		this.mcpServer = mcpServer;
+		this.toolCallMatcher = toolCallMatcher;
 	}
 
 	private AcpSyncClient client() {
@@ -161,8 +166,9 @@ public final class AcpChatService extends AssistantService {
 		List<ChatMessage> history = conversation.messages();
 		conversation.addMessage(ChatMessage.user(messageText));
 
-		ActiveRequest active = new ActiveRequest(conversation, listener);
+		ActiveRequest active = new ActiveRequest(conversation, listener, toolCallMatcher);
 		String sessionId = null;
+		clearToolCallMatcher();
 		try {
 			Session session = ensureSession(conversation);
 			sessionId = session.id();
@@ -187,6 +193,13 @@ public final class AcpChatService extends AssistantService {
 			if (sessionId != null) {
 				activeRequests.remove(sessionId, active);
 			}
+			clearToolCallMatcher();
+		}
+	}
+
+	private void clearToolCallMatcher() {
+		if (toolCallMatcher != null) {
+			toolCallMatcher.clear();
 		}
 	}
 

@@ -44,7 +44,8 @@ public class WingmanPanel extends JPanel {
 
 		this.mcpServer = startMcpServer(mcreator);
 		this.assistantService = new AcpChatService(mcreator, AcpProviders::selected,
-				mcpServer != null ? mcpServer.acpSchemaMCPDefinition() : null);
+				mcpServer != null ? mcpServer.acpSchemaMCPDefinition() : null,
+				mcpServer != null ? mcpServer.toolCallMatcher() : null);
 
 		ChatsPanel chatsPanel = new ChatsPanel(mcreator, assistantService);
 		add(chatsPanel, BorderLayout.CENTER);

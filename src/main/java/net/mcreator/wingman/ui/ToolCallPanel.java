@@ -25,17 +25,25 @@ import net.mcreator.ui.laf.themes.Theme;
 import net.mcreator.wingman.data.ChatMessage;
 import net.mcreator.wingman.data.StreamListener;
 
+import javax.annotation.Nullable;
 import javax.swing.*;
 import java.awt.*;
 
 final class ToolCallPanel extends JPanel {
 
+	private final String toolCallId;
 	private String toolName;
+	@Nullable private final String toolArguments;
+	@Nullable private String toolResult;
+
 	private final JLabel loader;
 	private final JTextArea label;
 
-	private ToolCallPanel(String toolName, boolean running) {
+	private ToolCallPanel(String toolCallId, String toolName, @Nullable String toolArguments, boolean running) {
 		super(new BorderLayout(6, 0));
+
+		this.toolCallId = toolCallId;
+		this.toolArguments = toolArguments;
 
 		setOpaque(false);
 		setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
@@ -56,11 +64,19 @@ final class ToolCallPanel extends JPanel {
 	}
 
 	static ToolCallPanel running(StreamListener.ToolRequestEvent requestEvent) {
-		return new ToolCallPanel(requestEvent.name(), true);
+		return new ToolCallPanel(requestEvent.id(), requestEvent.name(), requestEvent.arguments(), true);
 	}
 
-	static ToolCallPanel fromHistory(ChatMessage message) {
-		return new ToolCallPanel(message.toolName(), false);
+	/**
+	 * @param request The stored tool request; the result is attached with {@link #setToolResult(String)} when its
+	 *                message is read from the history
+	 */
+	static ToolCallPanel fromHistory(ChatMessage request) {
+		return new ToolCallPanel(request.toolCallId(), request.toolName(), request.toolArguments(), false);
+	}
+
+	void setToolResult(@Nullable String toolResult) {
+		this.toolResult = toolResult;
 	}
 
 	void setToolName(String toolName) {
@@ -70,7 +86,8 @@ final class ToolCallPanel extends JPanel {
 		repaint();
 	}
 
-	void markCompleted() {
+	void markCompleted(@Nullable String toolResult) {
+		setToolResult(toolResult);
 		loader.setVisible(false);
 		label.setText(labelText(false));
 		revalidate();

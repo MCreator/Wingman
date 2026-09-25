@@ -23,6 +23,7 @@ import com.agentclientprotocol.sdk.spec.AcpSchema;
 import net.mcreator.wingman.data.ChatConversation;
 import net.mcreator.wingman.data.ChatMessage;
 import net.mcreator.wingman.data.StreamListener;
+import net.mcreator.wingman.mcp.McpToolCallMatcher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -36,6 +37,9 @@ import java.util.Set;
  * State of the prompt currently running for a conversation. Session updates are recorded in the conversation and
  * forwarded to the stream listener. All session updates and cancellation synchronize on this object, so once
  * canceled, no further listener events are delivered for this request.
+ * <p>
+ * For calls of MCreator MCP tools, the result the tool actually produced is recorded instead of the result the
+ * agent reports, as agents may report only a placeholder for MCP calls.
  */
 final class ActiveRequest extends TurnAssembler {
 
@@ -43,12 +47,19 @@ final class ActiveRequest extends TurnAssembler {
 
 	private final ChatConversation conversation;
 	private final StreamListener listener;
+	@Nullable private final McpToolCallMatcher toolCallMatcher;
 
 	private boolean cancelled;
 
-	ActiveRequest(ChatConversation conversation, StreamListener listener) {
+	/**
+	 * @param toolCallMatcher Matcher of MCreator MCP tool results to the tool calls of this request, null if there
+	 *                        is no MCreator MCP server
+	 */
+	ActiveRequest(ChatConversation conversation, StreamListener listener,
+			@Nullable McpToolCallMatcher toolCallMatcher) {
 		this.conversation = conversation;
 		this.listener = listener;
+		this.toolCallMatcher = toolCallMatcher;
 	}
 
 	ChatConversation conversation() {
@@ -81,7 +92,15 @@ final class ActiveRequest extends TurnAssembler {
 		listener.onToolRenamed(new StreamListener.ToolRenameEvent(id, name));
 	}
 
-	@Override void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String result) {
+	@Override void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String arguments,
+			String result) {
+		McpToolCallMatcher.Match match = toolCallMatcher != null ? toolCallMatcher.take(name, arguments) : null;
+		if (match != null) {
+			// The MCP tool name is the same for every agent, while titles are formatted differently by each of them
+			renameTool(id, match.toolName());
+			name = match.toolName();
+			result = match.result();
+		}
 		conversation.addMessage(ChatMessage.toolResult(id, name, result));
 		listener.onToolResult(new StreamListener.ToolResultEvent(id, name, toKind(kind), result));
 	}
@@ -108,6 +127,10 @@ final class ActiveRequest extends TurnAssembler {
 			}
 			name = id != null ? toolName(id, title, toolCall.kind()) : "tool";
 			kind = toKind(id != null ? toolKind(id, toolCall.kind()) : null);
+			if (id != null) {
+				// The permission request may be the first report of the call with its complete arguments
+				rememberToolInput(id, toolCall.rawInput());
+			}
 		}
 
 		// The listener may block waiting for the user, so it is called without holding the request lock

@@ -40,6 +40,7 @@ public final class WingmanMcpServer implements Closeable {
 	public static final String NAME = "mcreator";
 
 	private final MCreatorMcp mcp;
+	private final McpToolCallMatcher toolCallMatcher = new McpToolCallMatcher();
 	private final int port;
 
 	public WingmanMcpServer(MCreator mcreator) throws IOException {
@@ -49,6 +50,7 @@ public final class WingmanMcpServer implements Closeable {
 
 		this.mcp = new MCreatorMcp(new HttpMcpTransport(port), () -> mcreator);
 		mcp.server().registerTool(new ChatHistoryTool(new ChatHistoryStorage(mcreator)));
+		mcp.server().addToolCallListener(toolCallMatcher);
 		try {
 			mcp.start();
 		} catch (IOException | RuntimeException e) {
@@ -61,6 +63,13 @@ public final class WingmanMcpServer implements Closeable {
 
 	public String url() {
 		return "http://127.0.0.1:" + port + "/mcp";
+	}
+
+	/**
+	 * @return Matcher that captures the results of the tools of this server for the tool calls reported over ACP
+	 */
+	public McpToolCallMatcher toolCallMatcher() {
+		return toolCallMatcher;
 	}
 
 	public AcpSchema.McpServer acpSchemaMCPDefinition() {

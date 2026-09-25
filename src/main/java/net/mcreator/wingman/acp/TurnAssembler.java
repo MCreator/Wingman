@@ -43,6 +43,8 @@ abstract class TurnAssembler {
 
 	// Kinds of the tool calls seen so far, as a permission request for a call may come without one
 	private final Map<String, AcpSchema.ToolKind> toolKinds = new HashMap<>();
+	// Latest inputs of the tool calls seen so far, as agents may report a call before its arguments are complete
+	private final Map<String, String> toolInputs = new HashMap<>();
 	private final Set<String> finishedTools = new HashSet<>();
 
 	// The thought or assistant message currently being streamed, if any
@@ -87,9 +89,11 @@ abstract class TurnAssembler {
 	abstract void onToolRenamed(String id, String name);
 
 	/**
-	 * @param kind Kind of the tool as reported by the agent, may be null
+	 * @param kind      Kind of the tool as reported by the agent, may be null
+	 * @param arguments Latest input the agent reported for the call, empty if none
 	 */
-	abstract void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String result);
+	abstract void onToolResult(String id, String name, @Nullable AcpSchema.ToolKind kind, String arguments,
+			String result);
 
 	/**
 	 * Finishes the message being streamed, if any. Messages without text are dropped without being reported.
@@ -150,15 +154,34 @@ abstract class TurnAssembler {
 			toolNames.put(id, name);
 			onToolRequest(id, name, knownKind, toJson(rawInput));
 		}
+		rememberToolInput(id, rawInput);
 		if ((status == AcpSchema.ToolCallStatus.COMPLETED || status == AcpSchema.ToolCallStatus.FAILED)
 				&& finishedTools.add(id)) {
-			onToolResult(id, name, knownKind, toolResultText(content, rawOutput, status));
+			onToolResult(id, name, knownKind, toolInputs.getOrDefault(id, ""),
+					toolResultText(content, rawOutput, status));
+		}
+	}
+
+	void rememberToolInput(String id, @Nullable Object rawInput) {
+		if (rawInput != null) {
+			toolInputs.put(id, toJson(rawInput));
+		}
+	}
+
+	/**
+	 * Renames a tool call already reported as requested, e.g. to the name of the MCP tool it was matched to
+	 */
+	void renameTool(String id, String name) {
+		String known = toolNames.put(id, name);
+		if (known != null && !known.equals(name)) {
+			onToolRenamed(id, name);
 		}
 	}
 
 	/**
 	 * @return Name of the tool call: the given title, or the kind if there is no title. A call already reported
-	 * with a different name is renamed to the given title, as the latest title is the most descriptive one
+	 * with a different name is renamed to the given title, as the latest title is the most descriptive one. A call
+	 * already finished keeps its name.
 	 */
 	String toolName(String id, @Nullable String title, @Nullable AcpSchema.ToolKind kind) {
 		String reported = title != null && !title.isBlank() ? title.trim() : null;
@@ -166,7 +189,7 @@ abstract class TurnAssembler {
 		if (known == null) {
 			return reported != null ? reported : kind != null ? kind.name().toLowerCase(Locale.ROOT) : "tool";
 		}
-		if (reported != null && !reported.equals(known)) {
+		if (reported != null && !reported.equals(known) && !finishedTools.contains(id)) {
 			toolNames.put(id, reported);
 			onToolRenamed(id, reported);
 			return reported;

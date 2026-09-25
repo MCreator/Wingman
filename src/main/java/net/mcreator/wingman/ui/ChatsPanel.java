@@ -322,8 +322,9 @@ public final class ChatsPanel extends JPanel {
 	private void reloadActiveConversationView() {
 		clearMessagesPanel();
 		List<ChatMessage> history = activeConversation.messages();
+		Map<String, ToolCallPanel> historyToolPanels = new HashMap<>();
 		for (ChatMessage message : history) {
-			appendHistoryMessage(message);
+			appendHistoryMessage(message, historyToolPanels);
 		}
 		inputArea.setText("");
 		refreshContextUsage();
@@ -610,31 +611,42 @@ public final class ChatsPanel extends JPanel {
 			appendMessageBubble(new ChatBubble(message), message.role());
 	}
 
-	private void appendHistoryMessage(ChatMessage message) {
+	private void appendHistoryMessage(ChatMessage message, Map<String, ToolCallPanel> toolPanels) {
 		switch (message.role()) {
 		case SYSTEM -> appendSystemError(message);
 		case THOUGHT -> appendRow(new ThinkingPanel(message, false));
 		// Tool calls are shown where they were requested; the history only contains calls that got a result
-		case TOOL_REQUEST -> appendRow(ToolCallPanel.fromHistory(message));
+		case TOOL_REQUEST -> {
+			ToolCallPanel panel = appendRow(ToolCallPanel.fromHistory(message));
+			if (message.toolCallId() != null) {
+				toolPanels.put(message.toolCallId(), panel);
+			}
+		}
 		case TOOL_RESULT -> {
+			ToolCallPanel panel = message.toolCallId() != null ? toolPanels.get(message.toolCallId()) : null;
+			if (panel != null) {
+				panel.setToolResult(message.toolResult());
+			}
 		}
 		default -> appendMessageBubble(new ChatBubble(message), message.role());
 		}
 	}
 
 	private void showStreamedMessage(ChatMessage message, boolean finished) {
-		if (streamedMessageView == null) {
-			streamedMessageView = message.role() == ChatMessage.Role.THOUGHT ?
-					appendRow(new ThinkingPanel(message, !finished)) :
-					appendMessageBubble(new ChatBubble(message), message.role());
-		} else if (streamedMessageView instanceof ThinkingPanel thinkingPanel) {
+		switch (streamedMessageView) {
+		case null -> streamedMessageView = message.role() == ChatMessage.Role.THOUGHT ?
+				appendRow(new ThinkingPanel(message, !finished)) :
+				appendMessageBubble(new ChatBubble(message), message.role());
+		case ThinkingPanel thinkingPanel -> {
 			if (finished) {
 				thinkingPanel.finish(message);
 			} else {
 				thinkingPanel.update(message.text());
 			}
-		} else if (streamedMessageView instanceof ChatBubble bubble) {
-			bubble.setText(message.text());
+		}
+		case ChatBubble bubble -> bubble.setText(message.text());
+		default -> {
+		}
 		}
 		if (finished) {
 			streamedMessageView = null;
@@ -734,7 +746,7 @@ public final class ChatsPanel extends JPanel {
 		if (panel == null) {
 			return;
 		}
-		panel.markCompleted();
+		panel.markCompleted(result.result());
 		messagesPanel.revalidate();
 		messagesPanel.repaint();
 	}

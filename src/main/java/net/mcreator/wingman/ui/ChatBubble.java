@@ -29,8 +29,16 @@ import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.DefaultCaret;
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.Locale;
+import java.util.Set;
 
 final class ChatBubble extends JPanel {
+
+	// Links in messages come from the agent, only web and mail links are opened. Other schemes (file, jar, custom
+	// protocol handlers of installed applications) could act on this device when opened
+	private static final Set<String> BROWSABLE_SCHEMES = Set.of("http", "https", "mailto");
 
 	private final ChatMessage.Role role;
 
@@ -79,8 +87,10 @@ final class ChatBubble extends JPanel {
 		ComponentUtils.deriveFont(htmlBody, 13);
 		htmlBody.addHyperlinkListener(e -> {
 			if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-				// The URL is null for links Swing could not parse, the raw href is opened then
-				DesktopUtils.browseSafe(e.getURL() != null ? e.getURL().toString() : e.getDescription());
+				// The URL is null for links Swing could not parse, the raw href is checked then
+				String link = e.getURL() != null ? e.getURL().toString() : e.getDescription();
+				if (isBrowsable(link))
+					DesktopUtils.browseSafe(link);
 			}
 		});
 
@@ -111,6 +121,17 @@ final class ChatBubble extends JPanel {
 		}
 		revalidate();
 		repaint();
+	}
+
+	static boolean isBrowsable(String link) {
+		if (link == null)
+			return false;
+		try {
+			String scheme = new URI(link.trim()).getScheme();
+			return scheme != null && BROWSABLE_SCHEMES.contains(scheme.toLowerCase(Locale.ROOT));
+		} catch (URISyntaxException e) {
+			return false;
+		}
 	}
 
 	private void setHtmlContent(String text) {

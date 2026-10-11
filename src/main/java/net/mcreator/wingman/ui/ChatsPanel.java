@@ -382,7 +382,7 @@ public final class ChatsPanel extends JPanel {
 
 		PromptComposerPanel composer = new PromptComposerPanel(composerBackground, borderColor,
 				Theme.current().getInterfaceAccentColor());
-		composer.setLayout(new BorderLayout(0, 0));
+		composer.setLayout(new BorderLayout(0, 4));
 		composer.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 8));
 
 		inputArea.setLineWrap(true);

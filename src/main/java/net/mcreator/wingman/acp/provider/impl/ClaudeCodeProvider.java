@@ -25,7 +25,7 @@ import net.mcreator.wingman.acp.provider.StdioAcpProvider;
 public final class ClaudeCodeProvider extends StdioAcpProvider {
 
 	public ClaudeCodeProvider() {
-		super("claude-code", "Claude Code", "Anthropic's Claude via the claude-agent-acp adapter", "claude /login");
+		super("claude-code", "Claude Code", "Anthropic's Claude via the claude-agent-acp adapter", "claude login");
 	}
 
 	@Override public AgentCommand command() {

@@ -35,6 +35,7 @@ public final class AcpProviders {
 			new GitHubCopilotProvider(),
 			new ClaudeCodeProvider(),
 			new CodexProvider(),
+			new OpenCodeProvider(),
 			CUSTOM
 			//@formatter:on
 	);

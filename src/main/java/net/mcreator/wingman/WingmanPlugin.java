@@ -66,9 +66,8 @@ public class WingmanPlugin extends JavaPlugin {
 			MCreator mcreator = event.getMCreator();
 			WingmanPanel wingmanPanel = new WingmanPanel(mcreator);
 			panels.put(mcreator, wingmanPanel);
-			// TODO: wingman icon
 			mcreator.getRightDockRegion()
-					.addDock(DOCK_WINGMAN, 280, L10N.t("dock.wingman"), UIRES.get("16px.dock_folder"), wingmanPanel);
+					.addDock(DOCK_WINGMAN, 280, L10N.t("dock.wingman"), UIRES.get("wingman.icon"), wingmanPanel);
 
 			// Workspaces without a stored dock state (freshly created ones) show Wingman expanded by default.
 			// The state is applied by MCreator once the window is opened, which happens after this event

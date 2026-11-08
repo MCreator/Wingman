@@ -229,7 +229,7 @@ abstract class TurnAssembler {
 			result.append(toJson(rawOutput));
 		}
 		if (result.isEmpty()) {
-			result.append(status.name().toLowerCase(Locale.ROOT));
+			result.append(status.value());
 		}
 		return result.toString();
 	}

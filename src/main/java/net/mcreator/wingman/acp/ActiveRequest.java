@@ -169,12 +169,15 @@ final class ActiveRequest extends TurnAssembler {
 		if (kind == null) {
 			return null;
 		}
-		return switch (kind) {
-			case ALLOW_ONCE -> StreamListener.PermissionDecision.ALLOW_ONCE;
-			case ALLOW_ALWAYS -> StreamListener.PermissionDecision.ALLOW_ALWAYS;
-			case REJECT_ONCE -> StreamListener.PermissionDecision.REJECT_ONCE;
-			case REJECT_ALWAYS -> StreamListener.PermissionDecision.REJECT_ALWAYS;
-		};
+		if (AcpSchema.PermissionOptionKind.ALLOW_ONCE.equals(kind))
+			return StreamListener.PermissionDecision.ALLOW_ONCE;
+		if (AcpSchema.PermissionOptionKind.ALLOW_ALWAYS.equals(kind))
+			return StreamListener.PermissionDecision.ALLOW_ALWAYS;
+		if (AcpSchema.PermissionOptionKind.REJECT_ONCE.equals(kind))
+			return StreamListener.PermissionDecision.REJECT_ONCE;
+		if (AcpSchema.PermissionOptionKind.REJECT_ALWAYS.equals(kind))
+			return StreamListener.PermissionDecision.REJECT_ALWAYS;
+		return null; // Unknown kinds (e.g. from newer agents) are not mapped
 	}
 
 	synchronized void complete(@Nullable AcpSchema.StopReason stopReason) {

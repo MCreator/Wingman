@@ -21,7 +21,7 @@ package net.mcreator.wingman.acp.provider;
 
 import com.agentclientprotocol.sdk.client.transport.AgentParameters;
 import com.agentclientprotocol.sdk.client.transport.StdioAcpClientTransport;
-import com.agentclientprotocol.sdk.json.JacksonAcpJsonMapperSupplier;
+import com.agentclientprotocol.sdk.json.jackson3.Jackson3AcpJsonMapperSupplier;
 import com.agentclientprotocol.sdk.spec.AcpClientTransport;
 import net.mcreator.io.OS;
 import net.mcreator.ui.init.L10N;
@@ -71,7 +71,7 @@ public abstract class StdioAcpProvider extends AcpProvider {
 		AgentParameters parameters = AgentParameters.builder(commandLine.getFirst())
 				.args(commandLine.subList(1, commandLine.size())).env(environment).build();
 		StdioAcpClientTransport transport = new StdioAcpClientTransport(parameters,
-				new JacksonAcpJsonMapperSupplier().get());
+				new Jackson3AcpJsonMapperSupplier().get());
 		transport.setStdErrorHandler(line -> LOG.debug("[{}] {}", id(), line));
 		transport.setExceptionHandler(e -> LOG.warn("ACP transport error", e));
 		return transport;

@@ -21,7 +21,7 @@ package net.mcreator.wingman.acp;
 
 import com.agentclientprotocol.sdk.client.AcpClient;
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
-import com.agentclientprotocol.sdk.spec.AcpClientSession;
+import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import net.mcreator.ui.MCreator;
 import net.mcreator.ui.init.L10N;
@@ -97,7 +97,7 @@ public final class AcpChatService extends AssistantService {
 			connecting = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT).clientCapabilities(
 							// Only allow manipulations of the workspace via official MCP, no direct FS or terminal
 							new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
-					.sessionUpdateConsumer(this::handleSessionUpdate)
+					.sessionUpdateHandler(this::handleSessionUpdate)
 					.requestPermissionHandler(this::handlePermissionRequest).build();
 			// Published before the agent is initialized and without holding the lock while it is, so a cancelled
 			// request can drop the connection, which fails the pending initialization instead of waiting for it
@@ -182,7 +182,7 @@ public final class AcpChatService extends AssistantService {
 		} catch (Throwable e) {
 			// Errors (e.g. ServiceConfigurationError, NoClassDefFoundError) are reported too, so the UI never waits forever
 			LOG.warn("ACP prompt failed", e);
-			if (!(e instanceof AcpClientSession.AcpError)) {
+			if (!(e instanceof AcpError)) {
 				// Only a JSON-RPC error proves the agent is still alive. Anything else (e.g. the agent process died, the
 				// transport closed, a timeout) may have left the connection unusable, so it is dropped and the next
 				// request connects again instead of failing with the same dead connection forever
@@ -214,7 +214,7 @@ public final class AcpChatService extends AssistantService {
 	private Session ensureSession(ChatConversation conversation) {
 		try {
 			return openSession(client(), conversation);
-		} catch (AcpClientSession.AcpError e) {
+		} catch (AcpError e) {
 			if (!AcpAuthenticator.isAuthRequired(e))
 				throw e;
 

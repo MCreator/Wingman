@@ -21,7 +21,7 @@ package net.mcreator.wingman.acp;
 
 import com.agentclientprotocol.sdk.client.AcpSyncClient;
 import com.agentclientprotocol.sdk.error.AcpErrorCodes;
-import com.agentclientprotocol.sdk.spec.AcpClientSession;
+import com.agentclientprotocol.sdk.spec.AcpError;
 import com.agentclientprotocol.sdk.spec.AcpSchema;
 import net.mcreator.io.OS;
 import net.mcreator.ui.component.util.ThreadUtil;
@@ -55,10 +55,10 @@ final class AcpAuthenticator {
 			Pattern.CASE_INSENSITIVE);
 
 	static boolean isAuthRequired(Throwable error) {
-		if (error instanceof AcpClientSession.AcpError acpError) {
+		if (error instanceof AcpError acpError) {
 			String message = acpError.getError().message();
 			return acpError.getCode() == AUTH_REQUIRED || acpError.getCode() == AcpErrorCodes.AUTHENTICATION_REQUIRED
-					|| (message != null && AUTH_REQUIRED_MESSAGE.matcher(message).find());
+					|| AUTH_REQUIRED_MESSAGE.matcher(message).find();
 		}
 		return false;
 	}

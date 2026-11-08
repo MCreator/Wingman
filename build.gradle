@@ -28,7 +28,8 @@ dependencies {
     mcreatorProvided project(':MCreator')
 
     // Use "export" configuration for dependencies that should be included in the plugin (if MCreator does not provide them)
-    export "com.agentclientprotocol:acp-core:0.17.0"
+    export "com.agentclientprotocol:acp-core:0.80.0"
+    export "com.agentclientprotocol:acp-json-jackson3:0.80.0"
 }
 
 // MCreator's build script configures idea.project, which only exists on the root project. As MCreator is included

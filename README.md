@@ -1,7 +1,11 @@
+<p align="center"><img src="src/main/resources/themes/default_dark/images/wingman/icon.svg" alt="MCreator Wingman" width="128"></p>
+
 # MCreator Wingman
 
 MCreator Wingman is a Java plugin for MCreator that adds an agent assistant dock to the MCreator workspace window.
 It uses ACP protocol to communicate with the selected agent.
+
+<p align="center"><img src="https://mcreator.net/image/wingman/demo5_small.gif" alt="MCreator Wingman demo"></p>
 
 # Setup
 

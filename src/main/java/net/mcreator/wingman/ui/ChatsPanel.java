@@ -34,6 +34,7 @@ import net.mcreator.util.StringUtils;
 import net.mcreator.wingman.data.*;
 import net.mcreator.wingman.data.StreamListener.PermissionDecision;
 import net.mcreator.wingman.data.StreamListener.PermissionRequest;
+import net.mcreator.wingman.preferences.WingmanPreferences;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -463,7 +464,9 @@ public final class ChatsPanel extends JPanel {
 		autoApproveCheckBox.setToolTipText(L10N.t("wingman.permission.auto.tooltip"));
 		autoApproveCheckBox.setForeground(Theme.current().getAltForegroundColor());
 		ComponentUtils.deriveFont(autoApproveCheckBox, 12);
+		autoApproveCheckBox.setSelected(WingmanPreferences.get().autoApprove.get());
 		autoApproveCheckBox.addActionListener(_ -> {
+			WingmanPreferences.get().autoApprove.set(autoApproveCheckBox.isSelected());
 			// Turning auto approval on also answers the requests currently waiting for the user
 			if (autoApproveCheckBox.isSelected()) {
 				for (PermissionRequestPanel pending : List.copyOf(pendingPermissions)) {

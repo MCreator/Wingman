@@ -20,6 +20,7 @@
 package net.mcreator.wingman.preferences;
 
 import net.mcreator.preferences.PreferencesSection;
+import net.mcreator.preferences.entries.BooleanEntry;
 import net.mcreator.preferences.entries.StringEntry;
 
 /**
@@ -34,11 +35,13 @@ public final class WingmanPreferences extends PreferencesSection {
 
 	public final StringEntry provider;
 	public final StringEntry customCommand;
+	public final BooleanEntry autoApprove;
 
 	private WingmanPreferences() {
 		super(IDENTIFIER);
 		provider = addEntry(new StringEntry("provider", ""));
 		customCommand = addEntry(new StringEntry("customCommand", ""));
+		autoApprove = addEntry(new BooleanEntry("autoApprove", false));
 	}
 
 	public static void init() {

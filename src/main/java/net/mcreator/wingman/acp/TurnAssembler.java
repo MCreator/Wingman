@@ -63,7 +63,7 @@ abstract class TurnAssembler {
 				onToolCall(call.toolCallId(), call.title(), call.kind(), call.status(), call.content(), call.rawInput(),
 						call.rawOutput());
 		default -> {
-			// Plans, mode changes, and available commands are not shown in the UI
+			// Plans, mode changes, and available commands are not shown in the UI, session info is handled by the service
 		}
 		}
 	}

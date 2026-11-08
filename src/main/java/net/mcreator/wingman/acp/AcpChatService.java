@@ -55,7 +55,10 @@ public final class AcpChatService extends AssistantService {
 	private static final Logger LOG = LogManager.getLogger(AcpChatService.class);
 
 	// A single agent turn may run for a long time, so the SDK default request timeout is far too short
-	private static final Duration REQUEST_TIMEOUT = Duration.ofHours(1);
+	// Lifecycle requests (initialize, sessions, authentication) must not hang forever if the agent is stuck, but logging
+	// in via the agent may wait for the user to finish in a browser. Prompts run as long as the agent works on them
+	private static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(5);
+	private static final Duration PROMPT_TIMEOUT = Duration.ofHours(1);
 
 	private final MCreator mcreator;
 	private final Supplier<AcpProvider> providerSupplier;
@@ -94,7 +97,8 @@ public final class AcpChatService extends AssistantService {
 			if (client != null)
 				return client;
 			provider = providerSupplier.get();
-			connecting = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT).clientCapabilities(
+			connecting = AcpClient.sync(provider.transport()).requestTimeout(REQUEST_TIMEOUT)
+					.promptTimeout(PROMPT_TIMEOUT).clientCapabilities(
 							// Only allow manipulations of the workspace via official MCP, no direct FS or terminal
 							new AcpSchema.ClientCapabilities(new AcpSchema.FileSystemCapability(false, false), false))
 					.sessionUpdateHandler(this::handleSessionUpdate)
@@ -304,6 +308,14 @@ public final class AcpChatService extends AssistantService {
 		if (update instanceof AcpSchema.UsageUpdate usage) {
 			if (usage.used() != null && usage.size() != null && usage.size() > 0) {
 				contextUsage.put(notification.sessionId(), Math.min(1f, (float) usage.used() / usage.size()));
+			}
+			return;
+		}
+		if (update instanceof AcpSchema.SessionInfoUpdate info) {
+			// Agents generating a title for the session know the topic better than the first message alone
+			ActiveRequest active = activeRequests.get(notification.sessionId());
+			if (active != null && info.title() != null) {
+				active.conversation().setTitle(info.title());
 			}
 			return;
 		}
